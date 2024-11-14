@@ -9,6 +9,25 @@ mod token;
 mod scanner;
 
 use scanner::Scanner;
+use scanner::ScanningErrorHandler;
+
+struct ErrorHandler;
+
+impl ErrorHandler
+{
+    fn report(&mut self, line: u32, location: String, message: &str)
+    {
+        println!("line {line} Error{location}: {message}");
+    }
+}
+
+impl ScanningErrorHandler for ErrorHandler
+{
+    fn callback(&mut self, line: u32, message: &str)
+    {
+        self.report(line, "".to_string(), message);
+    }
+}
 
 /// Rust based Lox language interpreter
 #[derive(Parser)]
@@ -22,7 +41,7 @@ struct CommandLineArguments
 fn main() -> ExitCode
 {
     let args = CommandLineArguments::parse();
-    
+
     match &args.script
     {
         Some(script_path) =>
@@ -42,13 +61,15 @@ fn main() -> ExitCode
 
 fn run_file(script_path: &PathBuf) -> ExitCode
 {
+    let error_handler: ErrorHandler = ErrorHandler{};
+
     let content: String = fs::read_to_string(script_path)
                                 .expect("Failed to read lox script");
-    
-    let mut scanner = Scanner::new(content);
+
+    let mut scanner = Scanner::new(content, error_handler);
 
     scanner.scan_tokens();
-    
+
     return ExitCode::SUCCESS;
 }
 
@@ -56,8 +77,8 @@ fn run_prompt() -> ExitCode
 {
     let stdin = io::stdin();
     let mut input = String::new();
-    
-    loop 
+
+    loop
     {
         print!("> ");
         match stdin.read_line(&mut input)
@@ -68,33 +89,24 @@ fn run_prompt() -> ExitCode
                 println!("EOF reached. Exiting...");
                 return ExitCode::SUCCESS;
             }
-            
+
             Ok(_) =>
             {
+                let error_handler: ErrorHandler = ErrorHandler{};
                 let trimmed_input = input.trim();
-                
-                let mut scanner = Scanner::new(trimmed_input.to_string());
+
+                let mut scanner = Scanner::new(trimmed_input.to_string(), error_handler);
                 scanner.scan_tokens();
 
                 input.clear();
             }
-            
+
             Err(error) =>
             {
                 eprint!("Error reading input: {}", error);
-                
+
                 return ExitCode::FAILURE;
             }
         }
-    }    
-}
-
-fn error(line: u32, message: &str)
-{
-    report(line, "".to_string(), message);
-}
-
-fn report(line: u32, location: String, message: &str)
-{
-    println!("line {line} Error{location}: {message}");
+    }
 }

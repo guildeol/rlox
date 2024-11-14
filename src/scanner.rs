@@ -1,18 +1,24 @@
 use crate::token::Token;
 use crate::token::types::{Literal, TokenKind};
 
-pub struct Scanner
+pub trait ScanningErrorHandler
+{
+    fn callback(&mut self, line: u32, message: &str);
+}
+
+pub struct Scanner<ErrorHandler: ScanningErrorHandler>
 {
     source: String,
     tokens: Vec<Token>,
     start: usize,
     current: usize,
     line: usize,
+    error_handler: ErrorHandler,
 }
 
-impl Scanner
+impl<ErrorHandler: ScanningErrorHandler> Scanner<ErrorHandler>
 {
-    pub fn new(source: String) -> Scanner
+    pub fn new(source: String, error_handler: ErrorHandler) -> Self
     {
         return Scanner {
             source: source,
@@ -20,6 +26,7 @@ impl Scanner
             start: 0,
             current: 0,
             line: 1,
+            error_handler: error_handler,
         };
     }
 
@@ -28,7 +35,6 @@ impl Scanner
         while !self.is_at_end()
         {
             self.start = self.current;
-
             self.scan_single_token();
         }
 
@@ -63,7 +69,7 @@ impl Scanner
             Some(';') => self.add_token(TokenKind::Semicolon, None),
             Some('*') => self.add_token(TokenKind::Star, None),
 
-            _ => super::error(self.line as u32, "Unexpected character"),
+            _ => self.error_handler.callback(self.line as u32, "Unexpected character"),
         }
     }
 
@@ -75,5 +81,66 @@ impl Scanner
 
         self.tokens.push(new_token);
     }
+}
 
+#[cfg(test)]
+mod test
+{
+    use super::*;
+
+    #[derive(Debug, PartialEq)]
+    struct ErrorSpy
+    {
+        line: u32,
+        message: String,
+    }
+
+    impl ScanningErrorHandler for ErrorSpy
+    {
+        fn callback(&mut self, line: u32, message: &str)
+        {
+            self.line = line;
+            self.message = message.to_string();
+        }
+    }
+
+    #[test]
+    fn should_get_single_char_token()
+    {
+        let error_spy: ErrorSpy = ErrorSpy{line: 0, message: "".to_string()};
+
+        let mut scanner = Scanner::new(" (){},.-+;*".to_string(), error_spy);
+        let tokens = scanner.scan_tokens();
+        let expected_token_kinds:[TokenKind; 10] = [
+            TokenKind::LeftParen,
+            TokenKind::RightParen,
+            TokenKind::LeftBrace,
+            TokenKind::RightBrace,
+            TokenKind::Comma,
+            TokenKind::Dot,
+            TokenKind::Minus,
+            TokenKind::Plus,
+            TokenKind::Semicolon,
+            TokenKind::Star
+        ];
+
+        assert_eq!(tokens.len(), "(){},.-+;*".len());
+        for (i, token) in tokens.iter().enumerate()
+        {
+            assert_eq!(token.kind, expected_token_kinds[i]);
+        }
+    }
+
+    #[test]
+    fn should_get_error_notification()
+    {
+        let error_spy: ErrorSpy = ErrorSpy{line: 0, message: "".to_string()};
+
+        // Cat emoji for invalid lexeme
+        let mut scanner = Scanner::new("🐱".to_string(), error_spy);
+        let tokens = scanner.scan_tokens();
+
+        assert_eq!(tokens.len(), 0);
+        assert_eq!(scanner.error_handler, ErrorSpy{line: 1, message: "Unexpected character".to_string()});
+    }
 }

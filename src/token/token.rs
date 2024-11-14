@@ -4,9 +4,9 @@ use crate::token::types::Literal;
 #[derive(Debug)]
 pub struct Token
 {
-    kind: TokenKind,
-    lexeme: String,
-    literal: Option<Literal>,
+    pub kind: TokenKind,
+    pub lexeme: String,
+    pub literal: Option<Literal>,
     pub line: usize,
 }
 

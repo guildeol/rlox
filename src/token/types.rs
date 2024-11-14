@@ -1,4 +1,4 @@
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum TokenKind
 {
     // Single-character tokens.
@@ -10,10 +10,10 @@ pub enum TokenKind
     Dot,
     Minus,
     Plus,
-    Semicolon, 
+    Semicolon,
     Slash,
     Star,
-  
+
     // One or two character tokens.
     Bang,
     BangEqual,
@@ -23,12 +23,12 @@ pub enum TokenKind
     GreaterEqual,
     Less,
     LessEqual,
-  
+
     // Literals.
     Identifier,
     String,
     Number,
-  
+
     // Keywords.
     And,
     Class,
@@ -46,7 +46,7 @@ pub enum TokenKind
     True,
     Var,
     While,
-  
+
     EndOfFile
 }
 
