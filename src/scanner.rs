@@ -54,6 +54,41 @@ impl<ErrorHandler: ScanningErrorHandler> Scanner<ErrorHandler>
         return c;
     }
 
+    fn is_next_char(&mut self, candidate: char) -> bool
+    {
+        if self.is_at_end()
+        {
+            return false;
+        }
+
+        if self.source.chars().nth(self.current) != Some(candidate)
+        {
+            return false;
+        }
+
+        self.current = self.current + 1;
+        return true;
+    }
+
+    fn peek(&mut self) -> char
+    {
+        if self.is_at_end()
+        {
+            return '\0'
+        };
+
+        return self.source.chars().nth(self.current).expect("Ran out of characters!");
+    }
+
+    fn add_token(&mut self, kind: TokenKind, literal: Option<Literal>)
+    {
+        let text = &self.source[self.start..self.current];
+
+        let new_token = Token::new(kind, text.to_string(), literal, self.line);
+
+        self.tokens.push(new_token);
+    }
+
     fn scan_single_token(&mut self)
     {
         match self.advance()
@@ -69,17 +104,78 @@ impl<ErrorHandler: ScanningErrorHandler> Scanner<ErrorHandler>
             Some(';') => self.add_token(TokenKind::Semicolon, None),
             Some('*') => self.add_token(TokenKind::Star, None),
 
+            Some('!') =>
+            {
+                if self.is_next_char('=')
+                {
+                    self.add_token(TokenKind::BangEqual, None);
+                }
+                else
+                {
+                    self.add_token(TokenKind::Bang, None);
+                }
+            }
+            Some('=') =>
+            {
+                if self.is_next_char('=')
+                {
+                    self.add_token(TokenKind::EqualEqual, None);
+                }
+                else
+                {
+                    self.add_token(TokenKind::Equal, None);
+                }
+            }
+            Some('<') =>
+            {
+                if self.is_next_char('=')
+                {
+                    self.add_token(TokenKind::LessEqual, None);
+                }
+                else
+                {
+                    self.add_token(TokenKind::Less, None);
+                }
+            }
+            Some('>') =>
+            {
+                if self.is_next_char('=')
+                {
+                    self.add_token(TokenKind::GreaterEqual, None);
+                }
+                else
+                {
+                    self.add_token(TokenKind::Greater, None);
+                }
+            }
+            Some('/') =>
+            {
+                if self.is_next_char('/')
+                {
+                    while (self.peek() != '\n' && !self.is_at_end())
+                    {
+                        self.advance();
+                    }
+                }
+                else
+                {
+                    self.add_token(TokenKind::Slash, None);
+                }
+            }
+
+            // Whitespace
+            Some(' ' | '\r' | '\t') =>
+            {
+                // Ignore
+            }
+            Some('\n') =>
+            {
+                self.line = self.line + 1;
+            }
+
+            // Default: call the error handler
             _ => self.error_handler.callback(self.line as u32, "Unexpected character"),
         }
-    }
-
-    fn add_token(&mut self, kind: TokenKind, literal: Option<Literal>)
-    {
-        let text = &self.source[self.start..self.current];
-
-        let new_token = Token::new(kind, text.to_string(), literal, self.line);
-
-        self.tokens.push(new_token);
     }
 }
 
@@ -93,54 +189,103 @@ mod test
     {
         line: u32,
         message: String,
+        had_error: bool,
     }
 
     impl ScanningErrorHandler for ErrorSpy
     {
         fn callback(&mut self, line: u32, message: &str)
         {
+            self.had_error = true;
             self.line = line;
             self.message = message.to_string();
         }
     }
 
-    #[test]
-    fn should_get_single_char_token()
+    struct TokenKindPair
     {
-        let error_spy: ErrorSpy = ErrorSpy{line: 0, message: "".to_string()};
+        symbol: String,
+        kind: TokenKind,
+    }
 
-        let mut scanner = Scanner::new(" (){},.-+;*".to_string(), error_spy);
-        let tokens = scanner.scan_tokens();
-        let expected_token_kinds:[TokenKind; 10] = [
-            TokenKind::LeftParen,
-            TokenKind::RightParen,
-            TokenKind::LeftBrace,
-            TokenKind::RightBrace,
-            TokenKind::Comma,
-            TokenKind::Dot,
-            TokenKind::Minus,
-            TokenKind::Plus,
-            TokenKind::Semicolon,
-            TokenKind::Star
+    impl TokenKindPair
+    {
+        fn new(symbol: &str, kind: TokenKind) -> Self
+        {
+            return TokenKindPair{symbol: symbol.to_string(), kind: kind}
+        }
+    }
+
+    #[test]
+    fn should_get_tokens()
+    {
+        let expected_tokens:Vec<TokenKindPair> = vec![
+            TokenKindPair::new("(", TokenKind::LeftParen),
+            TokenKindPair::new(")", TokenKind::RightParen),
+            TokenKindPair::new("{", TokenKind::LeftBrace),
+            TokenKindPair::new("}", TokenKind::RightBrace),
+            TokenKindPair::new(",", TokenKind::Comma),
+            TokenKindPair::new(".", TokenKind::Dot),
+            TokenKindPair::new("-", TokenKind::Minus),
+            TokenKindPair::new("+", TokenKind::Plus),
+            TokenKindPair::new(";", TokenKind::Semicolon),
+            TokenKindPair::new("*", TokenKind::Star),
+            TokenKindPair::new("!", TokenKind::Bang),
+            TokenKindPair::new("!=", TokenKind::BangEqual),
+            TokenKindPair::new("=", TokenKind::Equal),
+            TokenKindPair::new("==", TokenKind::EqualEqual),
+            TokenKindPair::new("<", TokenKind::Less),
+            TokenKindPair::new("<=", TokenKind::LessEqual),
+            TokenKindPair::new(">", TokenKind::Greater),
+            TokenKindPair::new(">=", TokenKind::GreaterEqual),
+            TokenKindPair::new("/", TokenKind::Slash),
         ];
 
-        assert_eq!(tokens.len(), "(){},.-+;*".len());
-        for (i, token) in tokens.iter().enumerate()
+        for token in expected_tokens
         {
-            assert_eq!(token.kind, expected_token_kinds[i]);
+            let error_spy: ErrorSpy = ErrorSpy{line: 0, message: "".to_string(), had_error: false};
+            let mut scanner = Scanner::new(token.symbol.clone(), error_spy);
+            let tokens = scanner.scan_tokens();
+
+            assert_eq!(tokens.len(), 1);
+            assert_eq!(token.kind, tokens[0].kind);
+            assert_eq!(scanner.error_handler.had_error, false);
         }
+    }
+
+    #[test]
+    fn should_advance_on_newline()
+    {
+        let error_spy: ErrorSpy = ErrorSpy{line: 0, message: "".to_string(), had_error: false};
+        let mut scanner = Scanner::new("*\n*".to_string(),
+                                                          error_spy);
+        scanner.scan_tokens();
+
+        assert_eq!(scanner.line, 2);
+    }
+
+    #[test]
+    fn should_ignore_commented_line()
+    {
+        let error_spy: ErrorSpy = ErrorSpy{line: 0, message: "".to_string(), had_error: false};
+        let mut scanner = Scanner::new("// These are \n //coments!".to_string(),
+                                                          error_spy);
+        let tokens = scanner.scan_tokens();
+
+        assert_eq!(tokens.len(), 0);
+        assert_eq!(scanner.error_handler.had_error, false);
     }
 
     #[test]
     fn should_get_error_notification()
     {
-        let error_spy: ErrorSpy = ErrorSpy{line: 0, message: "".to_string()};
+        let error_spy: ErrorSpy = ErrorSpy{line: 0, message: "".to_string(), had_error: false};
 
         // Cat emoji for invalid lexeme
         let mut scanner = Scanner::new("🐱".to_string(), error_spy);
         let tokens = scanner.scan_tokens();
 
         assert_eq!(tokens.len(), 0);
-        assert_eq!(scanner.error_handler, ErrorSpy{line: 1, message: "Unexpected character".to_string()});
+        assert_eq!(scanner.error_handler.had_error, true);
     }
 }
