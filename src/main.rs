@@ -8,8 +8,7 @@ use clap::Parser;
 mod token;
 mod scanner;
 
-use scanner::Scanner;
-use scanner::ScanningErrorHandler;
+use crate::scanner::{Scanner, ScanningErrorHandler};
 
 struct ErrorHandler;
 

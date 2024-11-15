@@ -1,10 +1,8 @@
 use crate::token::Token;
 use crate::token::types::{Literal, TokenKind};
 
-pub trait ScanningErrorHandler
-{
-    fn callback(&mut self, line: u32, message: &str);
-}
+use crate::scanner::types::Keyword;
+use crate::scanner::types::ScanningErrorHandler;
 
 pub struct Scanner<ErrorHandler: ScanningErrorHandler>
 {
@@ -18,6 +16,38 @@ pub struct Scanner<ErrorHandler: ScanningErrorHandler>
 
 impl<ErrorHandler: ScanningErrorHandler> Scanner<ErrorHandler>
 {
+    fn get_keyword_token_kind(&self, key: &str) -> Option<TokenKind>
+    {
+        const KEYWORDS: [Keyword; 16] = [
+            Keyword::new("and", TokenKind::And),
+            Keyword::new("class",  TokenKind::Class),
+            Keyword::new("else",   TokenKind::Else),
+            Keyword::new("false",  TokenKind::False),
+            Keyword::new("for",    TokenKind::For),
+            Keyword::new("fun",    TokenKind::Fun),
+            Keyword::new("if",     TokenKind::If),
+            Keyword::new("nil",    TokenKind::Nil),
+            Keyword::new("or",     TokenKind::Or),
+            Keyword::new("print",  TokenKind::Print),
+            Keyword::new("return", TokenKind::Return),
+            Keyword::new("super",  TokenKind::Super),
+            Keyword::new("this",   TokenKind::This),
+            Keyword::new("true",   TokenKind::True),
+            Keyword::new("var",    TokenKind::Var),
+            Keyword::new("while",  TokenKind::While),
+        ];
+
+        for entry in KEYWORDS
+        {
+            if entry.key == key
+            {
+                return Some(entry.value);
+            }
+        }
+
+        return None;
+    }
+
     pub fn new(source: String, error_handler: ErrorHandler) -> Self
     {
         return Scanner {
@@ -118,13 +148,13 @@ impl<ErrorHandler: ScanningErrorHandler> Scanner<ErrorHandler>
     fn get_number_literal(&mut self)
     {
         // Get the integer part
-        while self.peek().is_digit(10)
+        while self.peek().is_ascii_digit()
         {
             self.advance();
         }
 
         // Look for a fractional part
-        if self.peek() == '.' && self.peek_next().is_digit(10)
+        if self.peek() == '.' && self.peek_next().is_ascii_digit()
         {
             // Consume the '.'
             self.advance();
@@ -148,6 +178,21 @@ impl<ErrorHandler: ScanningErrorHandler> Scanner<ErrorHandler>
             {
                 self.error_handler.callback(self.line, "Invalid number literal");
             }
+        }
+    }
+
+    fn get_identifier(&mut self)
+    {
+        while self.peek().is_ascii_alphanumeric()
+        {
+            self.advance();
+        }
+
+        let text = &self.source[self.start .. self.current];
+        match self.get_keyword_token_kind(text)
+        {
+            Some(kind) => { self.add_token(kind, None); }
+            None => { self.add_token(TokenKind::Identifier, None); }
         }
     }
 
@@ -251,9 +296,13 @@ impl<ErrorHandler: ScanningErrorHandler> Scanner<ErrorHandler>
 
             Some(c) =>
             {
-                if c.is_digit(10)
+                if c.is_ascii_digit()
                 {
                     self.get_number_literal();
+                }
+                else if c.is_ascii_alphabetic()
+                {
+                    self.get_identifier();
                 }
                 else
                 {
@@ -399,6 +448,56 @@ mod test
         }
 
         assert_eq!(scanner.error_handler.had_error, false);
+    }
+
+    #[test]
+    fn should_get_identifier()
+    {
+        let error_spy: ErrorSpy = ErrorSpy{line: 0, message: "".to_string(), had_error: false};
+
+        // Cat emoji for invalid lexeme
+        let mut scanner = Scanner::new("rlox".to_string(), error_spy);
+        let tokens = scanner.scan_tokens();
+
+        assert_eq!(tokens.len(), 1);
+        assert_eq!(tokens[0].kind, TokenKind::Identifier);
+        assert_eq!(tokens[0].literal, None);
+        assert_eq!(tokens[0].lexeme, "rlox");
+        assert_eq!(scanner.error_handler.had_error, false);
+    }
+
+    #[test]
+    fn should_get_reserved_keywords()
+    {
+        let expected_tokens:Vec<Keyword> = vec![
+            Keyword::new("and", TokenKind::And),
+            Keyword::new("class",  TokenKind::Class),
+            Keyword::new("else",   TokenKind::Else),
+            Keyword::new("false",  TokenKind::False),
+            Keyword::new("for",    TokenKind::For),
+            Keyword::new("fun",    TokenKind::Fun),
+            Keyword::new("if",     TokenKind::If),
+            Keyword::new("nil",    TokenKind::Nil),
+            Keyword::new("or",     TokenKind::Or),
+            Keyword::new("print",  TokenKind::Print),
+            Keyword::new("return", TokenKind::Return),
+            Keyword::new("super",  TokenKind::Super),
+            Keyword::new("this",   TokenKind::This),
+            Keyword::new("true",   TokenKind::True),
+            Keyword::new("var",    TokenKind::Var),
+            Keyword::new("while",  TokenKind::While),
+        ];
+
+        for expected_token in expected_tokens
+        {
+            let error_spy: ErrorSpy = ErrorSpy{line: 0, message: "".to_string(), had_error: false};
+            let mut scanner = Scanner::new(expected_token.key.to_string(), error_spy);
+            let tokens = scanner.scan_tokens();
+
+            assert_eq!(tokens.len(), 1);
+            assert_eq!(expected_token.value, tokens[0].kind);
+            assert_eq!(scanner.error_handler.had_error, false);
+        }
     }
 
     #[test]
