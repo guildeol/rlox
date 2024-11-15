@@ -7,12 +7,12 @@ pub struct Token
     pub kind: TokenKind,
     pub lexeme: String,
     pub literal: Option<Literal>,
-    pub line: usize,
+    pub line: u32,
 }
 
 impl Token
 {
-    pub fn new(kind: TokenKind, lexeme: String, literal: Option<Literal>, line: usize) -> Token
+    pub fn new(kind: TokenKind, lexeme: String, literal: Option<Literal>, line: u32) -> Self
     {
         return Token {kind, lexeme, literal, line};
     }

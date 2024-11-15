@@ -17,7 +17,7 @@ impl ErrorHandler
 {
     fn report(&mut self, line: u32, location: String, message: &str)
     {
-        println!("line {line} Error{location}: {message}");
+        eprintln!("line {line} Error{location}: {message}");
     }
 }
 
@@ -103,7 +103,7 @@ fn run_prompt() -> ExitCode
 
             Err(error) =>
             {
-                eprint!("Error reading input: {}", error);
+                eprintln!("Error reading input: {}", error);
 
                 return ExitCode::FAILURE;
             }

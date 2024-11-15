@@ -50,12 +50,11 @@ pub enum TokenKind
     EndOfFile
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Literal
 {
     String(String),
-    Integer(u64),
-    Float(f64),
+    Number(f64),
     Boolean(bool),
     Nil,
 }

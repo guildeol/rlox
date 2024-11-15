@@ -12,7 +12,7 @@ pub struct Scanner<ErrorHandler: ScanningErrorHandler>
     tokens: Vec<Token>,
     start: usize,
     current: usize,
-    line: usize,
+    line: u32,
     error_handler: ErrorHandler,
 }
 
@@ -54,7 +54,7 @@ impl<ErrorHandler: ScanningErrorHandler> Scanner<ErrorHandler>
         return c;
     }
 
-    fn is_next_char(&mut self, candidate: char) -> bool
+    fn advance_if_equal(&mut self, candidate: char) -> bool
     {
         if self.is_at_end()
         {
@@ -78,6 +78,77 @@ impl<ErrorHandler: ScanningErrorHandler> Scanner<ErrorHandler>
         };
 
         return self.source.chars().nth(self.current).expect("Ran out of characters!");
+    }
+
+    fn peek_next(&mut self) -> char
+    {
+        if self.current + 1 >= self.source.len()
+        {
+            return '\0';
+        }
+
+
+        return self.source.chars().nth(self.current + 1).expect("Ran out of characters!");
+    }
+
+    fn get_string_literal(&mut self)
+    {
+        while self.peek() != '"' && !self.is_at_end()
+        {
+            if self.peek() == '\n'
+            {
+                self.line = self.line + 1;
+            }
+
+            self.advance();
+        }
+
+        if self.is_at_end()
+        {
+            self.error_handler.callback(self.line as u32, "Unterminated string.");
+            return;
+        }
+
+        self.advance();
+        let literal: &str = &self.source[self.start + 1 .. self.current - 1];
+
+        self.add_token(TokenKind::String, Some(Literal::String(literal.to_string())));
+    }
+
+    fn get_number_literal(&mut self)
+    {
+        // Get the integer part
+        while self.peek().is_digit(10)
+        {
+            self.advance();
+        }
+
+        // Look for a fractional part
+        if self.peek() == '.' && self.peek_next().is_digit(10)
+        {
+            // Consume the '.'
+            self.advance();
+
+            // Get the real part
+            while self.peek().is_digit(10)
+            {
+                self.advance();
+            }
+        }
+
+        let lexeme = &self.source[self.start .. self.current];
+        match lexeme.parse::<f64>()
+        {
+            Ok(value) =>
+            {
+                self.add_token(TokenKind::Number, Some(Literal::Number(value)));
+            }
+
+            Err(_) =>
+            {
+                self.error_handler.callback(self.line, "Invalid number literal");
+            }
+        }
     }
 
     fn add_token(&mut self, kind: TokenKind, literal: Option<Literal>)
@@ -106,7 +177,7 @@ impl<ErrorHandler: ScanningErrorHandler> Scanner<ErrorHandler>
 
             Some('!') =>
             {
-                if self.is_next_char('=')
+                if self.advance_if_equal('=')
                 {
                     self.add_token(TokenKind::BangEqual, None);
                 }
@@ -117,7 +188,7 @@ impl<ErrorHandler: ScanningErrorHandler> Scanner<ErrorHandler>
             }
             Some('=') =>
             {
-                if self.is_next_char('=')
+                if self.advance_if_equal('=')
                 {
                     self.add_token(TokenKind::EqualEqual, None);
                 }
@@ -128,7 +199,7 @@ impl<ErrorHandler: ScanningErrorHandler> Scanner<ErrorHandler>
             }
             Some('<') =>
             {
-                if self.is_next_char('=')
+                if self.advance_if_equal('=')
                 {
                     self.add_token(TokenKind::LessEqual, None);
                 }
@@ -139,7 +210,7 @@ impl<ErrorHandler: ScanningErrorHandler> Scanner<ErrorHandler>
             }
             Some('>') =>
             {
-                if self.is_next_char('=')
+                if self.advance_if_equal('=')
                 {
                     self.add_token(TokenKind::GreaterEqual, None);
                 }
@@ -150,9 +221,9 @@ impl<ErrorHandler: ScanningErrorHandler> Scanner<ErrorHandler>
             }
             Some('/') =>
             {
-                if self.is_next_char('/')
+                if self.advance_if_equal('/')
                 {
-                    while (self.peek() != '\n' && !self.is_at_end())
+                    while self.peek() != '\n' && !self.is_at_end()
                     {
                         self.advance();
                     }
@@ -161,6 +232,11 @@ impl<ErrorHandler: ScanningErrorHandler> Scanner<ErrorHandler>
                 {
                     self.add_token(TokenKind::Slash, None);
                 }
+            }
+
+            Some('"') =>
+            {
+                self.get_string_literal();
             }
 
             // Whitespace
@@ -173,8 +249,22 @@ impl<ErrorHandler: ScanningErrorHandler> Scanner<ErrorHandler>
                 self.line = self.line + 1;
             }
 
-            // Default: call the error handler
-            _ => self.error_handler.callback(self.line as u32, "Unexpected character"),
+            Some(c) =>
+            {
+                if c.is_digit(10)
+                {
+                    self.get_number_literal();
+                }
+                else
+                {
+                    self.error_handler.callback(self.line as u32, "Unexpected character");
+                }
+            }
+
+            None =>
+            {
+                self.error_handler.callback(self.line as u32, "No character retrieved")
+            }
         }
     }
 }
@@ -273,6 +363,41 @@ mod test
         let tokens = scanner.scan_tokens();
 
         assert_eq!(tokens.len(), 0);
+        assert_eq!(scanner.error_handler.had_error, false);
+    }
+
+    #[test]
+    fn should_get_string_literal()
+    {
+        let error_spy: ErrorSpy = ErrorSpy{line: 0, message: "".to_string(), had_error: false};
+
+        // Cat emoji for invalid lexeme
+        let mut scanner = Scanner::new("\"foo\"".to_string(), error_spy);
+        let tokens = scanner.scan_tokens();
+
+        assert_eq!(tokens.len(), 1);
+        assert_eq!(tokens[0].kind, TokenKind::String);
+        assert_eq!(tokens[0].literal, Some(Literal::String("foo".to_string())));
+        assert_eq!(scanner.error_handler.had_error, false);
+    }
+
+    #[test]
+    fn should_get_number_literal()
+    {
+        let error_spy: ErrorSpy = ErrorSpy{line: 0, message: "".to_string(), had_error: false};
+
+        // Cat emoji for invalid lexeme
+        let mut scanner = Scanner::new("123\n456.789".to_string(), error_spy);
+        let tokens = scanner.scan_tokens();
+
+        let expected_numbers = [123.0, 456.789];
+
+        for (i, token) in tokens.iter().enumerate()
+        {
+            assert_eq!(token.kind, TokenKind::Number);
+            assert_eq!(token.literal, Some(Literal::Number(expected_numbers[i])))
+        }
+
         assert_eq!(scanner.error_handler.had_error, false);
     }
 
