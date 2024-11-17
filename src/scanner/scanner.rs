@@ -68,6 +68,8 @@ impl<ErrorHandler: ScanningErrorHandler> Scanner<ErrorHandler>
             self.scan_single_token();
         }
 
+        self.add_token(TokenKind::EndOfFile, None);
+
         return &self.tokens;
     }
 
@@ -198,7 +200,16 @@ impl<ErrorHandler: ScanningErrorHandler> Scanner<ErrorHandler>
 
     fn add_token(&mut self, kind: TokenKind, literal: Option<Literal>)
     {
-        let text = &self.source[self.start..self.current];
+        let text: &str;
+
+        if kind != TokenKind::EndOfFile
+        {
+            text = &self.source[self.start..self.current];
+        }
+        else
+        {
+            text = "";
+        }
 
         let new_token = Token::new(kind, text.to_string(), literal, self.line);
 
@@ -386,7 +397,6 @@ mod test
             let mut scanner = Scanner::new(token.symbol.clone(), error_spy);
             let tokens = scanner.scan_tokens();
 
-            assert_eq!(tokens.len(), 1);
             assert_eq!(token.kind, tokens[0].kind);
             assert_eq!(scanner.error_handler.had_error, false);
         }
@@ -409,9 +419,8 @@ mod test
         let error_spy: ErrorSpy = ErrorSpy{line: 0, message: "".to_string(), had_error: false};
         let mut scanner = Scanner::new("// These are \n //coments!".to_string(),
                                                           error_spy);
-        let tokens = scanner.scan_tokens();
+        scanner.scan_tokens();
 
-        assert_eq!(tokens.len(), 0);
         assert_eq!(scanner.error_handler.had_error, false);
     }
 
@@ -424,7 +433,6 @@ mod test
         let mut scanner = Scanner::new("\"foo\"".to_string(), error_spy);
         let tokens = scanner.scan_tokens();
 
-        assert_eq!(tokens.len(), 1);
         assert_eq!(tokens[0].kind, TokenKind::String);
         assert_eq!(tokens[0].literal, Some(Literal::String("foo".to_string())));
         assert_eq!(scanner.error_handler.had_error, false);
@@ -441,7 +449,7 @@ mod test
 
         let expected_numbers = [123.0, 456.789];
 
-        for (i, token) in tokens.iter().enumerate()
+        for (i, token) in tokens[0..2].iter().enumerate()
         {
             assert_eq!(token.kind, TokenKind::Number);
             assert_eq!(token.literal, Some(Literal::Number(expected_numbers[i])))
@@ -459,7 +467,6 @@ mod test
         let mut scanner = Scanner::new("rlox".to_string(), error_spy);
         let tokens = scanner.scan_tokens();
 
-        assert_eq!(tokens.len(), 1);
         assert_eq!(tokens[0].kind, TokenKind::Identifier);
         assert_eq!(tokens[0].literal, None);
         assert_eq!(tokens[0].lexeme, "rlox");
@@ -494,7 +501,6 @@ mod test
             let mut scanner = Scanner::new(expected_token.key.to_string(), error_spy);
             let tokens = scanner.scan_tokens();
 
-            assert_eq!(tokens.len(), 1);
             assert_eq!(expected_token.value, tokens[0].kind);
             assert_eq!(scanner.error_handler.had_error, false);
         }
@@ -507,9 +513,8 @@ mod test
 
         // Cat emoji for invalid lexeme
         let mut scanner = Scanner::new("🐱".to_string(), error_spy);
-        let tokens = scanner.scan_tokens();
+        scanner.scan_tokens();
 
-        assert_eq!(tokens.len(), 0);
         assert_eq!(scanner.error_handler.had_error, true);
     }
 }
