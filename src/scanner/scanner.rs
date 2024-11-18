@@ -517,4 +517,17 @@ mod test
 
         assert_eq!(scanner.error_handler.had_error, true);
     }
+
+    #[test]
+    fn should_get_unterminated_string_notification()
+    {
+        let error_spy: ErrorSpy = ErrorSpy{line: 0, message: "".to_string(), had_error: false};
+
+        // Cat emoji for invalid lexeme
+        let mut scanner = Scanner::new("\"".to_string(), error_spy);
+        scanner.scan_tokens();
+
+        assert_eq!(scanner.error_handler.had_error, true);
+        assert_eq!(scanner.error_handler.message, "Unterminated string.");
+    }
 }
