@@ -67,25 +67,10 @@ impl Display for Literal
     {
         match self
         {
-            Literal::String(s) =>
-            {
-                return write!(f, "\"{}\"", s);
-            }
-
-            Literal::Number(n) =>
-            {
-                return write!(f, "{}", n);
-            }
-
-            Literal::Boolean(b) =>
-            {
-                return write!(f, "{}", b);
-            }
-
-            Literal::Nil =>
-            {
-                return write!(f, "Nil");
-            }
+            Literal::String(s) =>  write!(f, "\"{}\"", s),
+            Literal::Number(n) =>  write!(f, "{}", n),
+            Literal::Boolean(b) => write!(f, "{}", b),
+            Literal::Nil => write!(f, "Nil"),
         }
     }
 }

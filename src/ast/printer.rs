@@ -1,27 +1,42 @@
-use crate::ast::{Expr, Visitor, LiteralValue};
+use crate::ast::{Expr, Visitor};
+use crate::token::Token;
+use crate::token::types::Literal;
 
 pub struct AstFormatter;
 
 impl AstFormatter
 {
-    pub fn format(&mut self, e: &impl Expr) -> String
+    pub fn format(&mut self, e: &Expr) -> String
     {
        return e.accept(self);
     }
 
-    pub fn println(&mut self, e: &impl Expr)
+    pub fn println(&mut self, e: &Expr)
     {
         println!("{}", e.accept(self));
     }
 }
 
-impl Visitor for AstFormatter
+impl Visitor<String> for AstFormatter
 {
-    type Item = String;
-
-    fn visit_literal(&mut self, literal: &LiteralValue) -> Self::Item
+    fn visit_binary_expr(&self, left: &Expr, operator: &Token, right: &Expr) -> String
     {
-        return format!("{}", literal.value);
+        todo!()
+    }
+
+    fn visit_grouping_expr(&self, expression: &Expr) -> String
+    {
+        todo!()
+    }
+
+    fn visit_literal_expr(&self, literal: &Literal) -> String
+    {
+        return format!("{}", literal);
+    }
+
+    fn visit_unary_expr(&self, operator: &Token, right: &Expr) -> String
+    {
+        todo!()
     }
 }
 
@@ -36,7 +51,7 @@ mod test
     {
         struct LiteralReprPair
         {
-            lit: LiteralValue,
+            lit: crate::ast::expr::Expr,
             repr: String,
         }
 
@@ -44,7 +59,7 @@ mod test
         {
             fn new(lit: Literal, repr: &str) -> Self
             {
-                return LiteralReprPair {lit: LiteralValue::new(lit), repr: repr.to_string()};
+                return LiteralReprPair {lit: Expr::new_literal(lit), repr: repr.to_string()};
             }
         }
 
