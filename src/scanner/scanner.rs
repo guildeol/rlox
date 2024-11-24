@@ -211,7 +211,7 @@ impl<ErrorHandler: ScanningErrorHandler> Scanner<ErrorHandler>
             text = "";
         }
 
-        let new_token = Token::new(kind, text.to_string(), literal, self.line);
+        let new_token = Token::new(kind, text, literal, self.line);
 
         self.tokens.push(new_token);
     }
