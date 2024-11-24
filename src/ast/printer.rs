@@ -34,10 +34,33 @@ mod test
     #[test]
     fn should_print_literal_expr()
     {
-        let mut ast_formatter: AstFormatter = AstFormatter{};
-        let expression = LiteralValue::new(Literal::Nil);
-        let repr = ast_formatter.format(&expression);
+        struct LiteralReprPair
+        {
+            lit: LiteralValue,
+            repr: String,
+        }
 
-        assert_eq!(repr, "Nil");
+        impl LiteralReprPair
+        {
+            fn new(lit: Literal, repr: &str) -> Self
+            {
+                return LiteralReprPair {lit: LiteralValue::new(lit), repr: repr.to_string()};
+            }
+        }
+
+        let expressions = vec![
+            LiteralReprPair::new(Literal::String("test".to_string()), "\"test\""),
+            LiteralReprPair::new(Literal::Number(197.0), "197"),
+            LiteralReprPair::new(Literal::Boolean(false), "false"),
+            LiteralReprPair::new(Literal::Nil, "Nil"),
+        ];
+
+        let mut ast_formatter: AstFormatter = AstFormatter{};
+
+        for e in expressions
+        {
+            let repr = ast_formatter.format(&e.lit);
+            assert_eq!(repr, e.repr);
+        }
     }
 }
