@@ -5,8 +5,9 @@ use std::process::ExitCode;
 
 use clap::Parser;
 
-mod token;
+mod ast;
 mod scanner;
+mod token;
 
 use crate::scanner::{Scanner, ScanningErrorHandler};
 
