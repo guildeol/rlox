@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum TokenKind
 {
     // Single-character tokens.
@@ -52,7 +52,7 @@ pub enum TokenKind
     EndOfFile
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Literal
 {
     String(String),
