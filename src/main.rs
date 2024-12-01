@@ -3,14 +3,17 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use clap::Parser;
+use clap::Parser as ClapParser;
 
 mod ast;
 mod scanner;
 mod token;
+mod parser;
+mod error;
 
-use crate::scanner::{Scanner, ScanningErrorHandler};
-
+use scanner::Scanner;
+use parser::Parser;
+use error::ProcessingErrorHandler;
 struct ErrorHandler;
 
 impl ErrorHandler
@@ -21,7 +24,7 @@ impl ErrorHandler
     }
 }
 
-impl ScanningErrorHandler for ErrorHandler
+impl ProcessingErrorHandler for ErrorHandler
 {
     fn callback(&mut self, line: u32, message: &str)
     {
@@ -30,7 +33,7 @@ impl ScanningErrorHandler for ErrorHandler
 }
 
 /// Rust based Lox language interpreter
-#[derive(Parser)]
+#[derive(ClapParser)]
 struct CommandLineArguments
 {
     /// Lox script to run (optional)
@@ -68,7 +71,9 @@ fn run_file(script_path: &PathBuf) -> ExitCode
 
     let mut scanner = Scanner::new(content, error_handler);
 
-    scanner.scan_tokens();
+    let tokens = scanner.scan_tokens();
+
+    let parser = Parser::new(tokens);
 
     return ExitCode::SUCCESS;
 }

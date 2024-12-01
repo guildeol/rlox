@@ -2,9 +2,9 @@ use crate::token::Token;
 use crate::token::types::{Literal, TokenKind};
 
 use crate::scanner::types::Keyword;
-use crate::scanner::types::ScanningErrorHandler;
+use crate::error::ProcessingErrorHandler;
 
-pub struct Scanner<ErrorHandler: ScanningErrorHandler>
+pub struct Scanner<ErrorHandler: ProcessingErrorHandler>
 {
     source: String,
     tokens: Vec<Token>,
@@ -14,7 +14,7 @@ pub struct Scanner<ErrorHandler: ScanningErrorHandler>
     error_handler: ErrorHandler,
 }
 
-impl<ErrorHandler: ScanningErrorHandler> Scanner<ErrorHandler>
+impl<ErrorHandler: ProcessingErrorHandler> Scanner<ErrorHandler>
 {
     fn get_keyword_token_kind(&self, key: &str) -> Option<TokenKind>
     {
@@ -60,7 +60,7 @@ impl<ErrorHandler: ScanningErrorHandler> Scanner<ErrorHandler>
         };
     }
 
-    pub fn scan_tokens(&mut self) -> &Vec<Token>
+    pub fn scan_tokens(&mut self) -> Vec<Token>
     {
         while !self.is_at_end()
         {
@@ -70,7 +70,7 @@ impl<ErrorHandler: ScanningErrorHandler> Scanner<ErrorHandler>
 
         self.add_token(TokenKind::EndOfFile, None);
 
-        return &self.tokens;
+        return std::mem::take(&mut self.tokens);
     }
 
     fn is_at_end(&self) -> bool
@@ -342,7 +342,7 @@ mod test
         had_error: bool,
     }
 
-    impl ScanningErrorHandler for ErrorSpy
+    impl ProcessingErrorHandler for ErrorSpy
     {
         fn callback(&mut self, line: u32, message: &str)
         {
