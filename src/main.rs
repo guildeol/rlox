@@ -14,7 +14,7 @@ mod error;
 
 use scanner::Scanner;
 use parser::Parser;
-use error::{ScannerErrorHandler, ParserErrorHandler};
+use error::ErrorHandler;
 
 /// Rust based Lox language interpreter
 #[derive(ClapParser)]
@@ -50,12 +50,11 @@ fn run_file(script_path: &PathBuf) -> ExitCode
 {
     let content: String = fs::read_to_string(script_path).expect("Failed to read lox script");
 
-    let scanner_error_handler = ScannerErrorHandler::new();
-    let mut scanner = Scanner::new(content, scanner_error_handler);
+    let mut error_handler = ErrorHandler::new();
+    let mut scanner = Scanner::new(&content, &mut error_handler);
     let tokens = scanner.scan_tokens();
 
-    let parser_error_handler = ParserErrorHandler::new();
-    let mut parser = Parser::new(tokens, parser_error_handler);
+    let mut parser = Parser::new(tokens, error_handler);
 
     let expr = parser.parse();
 
@@ -84,10 +83,10 @@ fn run_prompt() -> ExitCode
 
             Ok(_) =>
             {
-                let error_handler: ScannerErrorHandler = ScannerErrorHandler::new();
+                let mut error_handler: ErrorHandler = ErrorHandler::new();
                 let trimmed_input = input.trim();
 
-                let mut scanner = Scanner::new(trimmed_input.to_string(), error_handler);
+                let mut scanner = Scanner::new(trimmed_input, &mut error_handler);
                 scanner.scan_tokens();
 
                 input.clear();

@@ -279,8 +279,8 @@ mod test
     #[test]
     fn should_parse_expression()
     {
-        let scanner_error_handler = ErrorSpy::new();
-        let mut scanner = Scanner::new("1 + 2".to_string(), scanner_error_handler);
+        let mut scanner_error_handler = ErrorSpy::new();
+        let mut scanner = Scanner::new("1 + 2", &mut scanner_error_handler);
 
         let tokens = scanner.scan_tokens();
 

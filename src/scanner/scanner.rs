@@ -4,51 +4,19 @@ use crate::token::types::{Literal, TokenKind};
 use crate::scanner::types::Keyword;
 use crate::error::ProcessingErrorHandler;
 
-pub struct Scanner<ErrorHandler: ProcessingErrorHandler>
+pub struct Scanner<'a, ErrorHandler: ProcessingErrorHandler>
 {
-    source: String,
+    source: &'a str,
     tokens: Vec<Token>,
     start: usize,
     current: usize,
     line: u32,
-    error_handler: ErrorHandler,
+    error_handler: &'a mut ErrorHandler,
 }
 
-impl<ErrorHandler: ProcessingErrorHandler> Scanner<ErrorHandler>
+impl<'a, ErrorHandler: ProcessingErrorHandler> Scanner<'a, ErrorHandler>
 {
-    fn get_keyword_token_kind(&self, key: &str) -> Option<TokenKind>
-    {
-        const KEYWORDS: [Keyword; 16] = [
-            Keyword::new("and", TokenKind::And),
-            Keyword::new("class", TokenKind::Class),
-            Keyword::new("else", TokenKind::Else),
-            Keyword::new("false", TokenKind::False),
-            Keyword::new("for", TokenKind::For),
-            Keyword::new("fun", TokenKind::Fun),
-            Keyword::new("if", TokenKind::If),
-            Keyword::new("nil", TokenKind::Nil),
-            Keyword::new("or", TokenKind::Or),
-            Keyword::new("print", TokenKind::Print),
-            Keyword::new("return",TokenKind::Return),
-            Keyword::new("super", TokenKind::Super),
-            Keyword::new("this", TokenKind::This),
-            Keyword::new("true", TokenKind::True),
-            Keyword::new("var", TokenKind::Var),
-            Keyword::new("while", TokenKind::While),
-        ];
-
-        for entry in KEYWORDS
-        {
-            if entry.key == key
-            {
-                return Some(entry.value);
-            }
-        }
-
-        return None;
-    }
-
-    pub fn new(source: String, error_handler: ErrorHandler) -> Self
+    pub fn new(source: &'a str, error_handler: &'a mut ErrorHandler) -> Self
     {
         return Scanner {
             source: source,
@@ -191,7 +159,7 @@ impl<ErrorHandler: ProcessingErrorHandler> Scanner<ErrorHandler>
         }
 
         let text = &self.source[self.start .. self.current];
-        match self.get_keyword_token_kind(text)
+        match get_keyword_token_kind(text)
         {
             Some(kind) => { self.add_token(kind, None); }
             None => { self.add_token(TokenKind::Identifier, None); }
@@ -329,6 +297,39 @@ impl<ErrorHandler: ProcessingErrorHandler> Scanner<ErrorHandler>
     }
 }
 
+fn get_keyword_token_kind(key: &str) -> Option<TokenKind>
+{
+    const KEYWORDS: [Keyword; 16] = [
+        Keyword::new("and", TokenKind::And),
+        Keyword::new("class", TokenKind::Class),
+        Keyword::new("else", TokenKind::Else),
+        Keyword::new("false", TokenKind::False),
+        Keyword::new("for", TokenKind::For),
+        Keyword::new("fun", TokenKind::Fun),
+        Keyword::new("if", TokenKind::If),
+        Keyword::new("nil", TokenKind::Nil),
+        Keyword::new("or", TokenKind::Or),
+        Keyword::new("print", TokenKind::Print),
+        Keyword::new("return",TokenKind::Return),
+        Keyword::new("super", TokenKind::Super),
+        Keyword::new("this", TokenKind::This),
+        Keyword::new("true", TokenKind::True),
+        Keyword::new("var", TokenKind::Var),
+        Keyword::new("while", TokenKind::While),
+    ];
+
+    for entry in KEYWORDS
+    {
+        if entry.key == key
+        {
+            return Some(entry.value);
+        }
+    }
+
+    return None;
+}
+
+
 #[cfg(test)]
 mod test
 {
@@ -395,8 +396,8 @@ mod test
 
         for token in expected_tokens
         {
-            let error_spy: ErrorSpy = ErrorSpy{line: 0, message: "".to_string(), had_error: false};
-            let mut scanner = Scanner::new(token.symbol.clone(), error_spy);
+            let mut error_spy: ErrorSpy = ErrorSpy{line: 0, message: "".to_string(), had_error: false};
+            let mut scanner = Scanner::new(&token.symbol, & mut error_spy);
             let tokens = scanner.scan_tokens();
 
             assert_eq!(token.kind, tokens[0].kind);
@@ -407,9 +408,8 @@ mod test
     #[test]
     fn should_advance_on_newline()
     {
-        let error_spy: ErrorSpy = ErrorSpy{line: 0, message: "".to_string(), had_error: false};
-        let mut scanner = Scanner::new("*\n*".to_string(),
-                                                          error_spy);
+        let mut error_spy: ErrorSpy = ErrorSpy{line: 0, message: "".to_string(), had_error: false};
+        let mut scanner = Scanner::new("*\n*", &mut error_spy);
         scanner.scan_tokens();
 
         assert_eq!(scanner.line, 2);
@@ -418,9 +418,8 @@ mod test
     #[test]
     fn should_ignore_commented_line()
     {
-        let error_spy: ErrorSpy = ErrorSpy{line: 0, message: "".to_string(), had_error: false};
-        let mut scanner = Scanner::new("// These are \n //coments!".to_string(),
-                                                          error_spy);
+        let mut error_spy: ErrorSpy = ErrorSpy{line: 0, message: "".to_string(), had_error: false};
+        let mut scanner = Scanner::new("// These are \n //coments!", &mut error_spy);
         scanner.scan_tokens();
 
         assert_eq!(scanner.error_handler.had_error, false);
@@ -429,10 +428,10 @@ mod test
     #[test]
     fn should_get_string_literal()
     {
-        let error_spy: ErrorSpy = ErrorSpy{line: 0, message: "".to_string(), had_error: false};
+        let mut error_spy: ErrorSpy = ErrorSpy{line: 0, message: "".to_string(), had_error: false};
 
         // Cat emoji for invalid lexeme
-        let mut scanner = Scanner::new("\"foo\"".to_string(), error_spy);
+        let mut scanner = Scanner::new("\"foo\"", &mut error_spy);
         let tokens = scanner.scan_tokens();
 
         assert_eq!(tokens[0].kind, TokenKind::String);
@@ -443,10 +442,10 @@ mod test
     #[test]
     fn should_get_number_literal()
     {
-        let error_spy: ErrorSpy = ErrorSpy{line: 0, message: "".to_string(), had_error: false};
+        let mut error_spy: ErrorSpy = ErrorSpy{line: 0, message: "".to_string(), had_error: false};
 
         // Cat emoji for invalid lexeme
-        let mut scanner = Scanner::new("123\n456.789".to_string(), error_spy);
+        let mut scanner = Scanner::new("123\n456.789", &mut error_spy);
         let tokens = scanner.scan_tokens();
 
         let expected_numbers = [123.0, 456.789];
@@ -463,10 +462,10 @@ mod test
     #[test]
     fn should_get_identifier()
     {
-        let error_spy: ErrorSpy = ErrorSpy{line: 0, message: "".to_string(), had_error: false};
+        let mut error_spy: ErrorSpy = ErrorSpy{line: 0, message: "".to_string(), had_error: false};
 
         // Cat emoji for invalid lexeme
-        let mut scanner = Scanner::new("rlox".to_string(), error_spy);
+        let mut scanner = Scanner::new("rlox", &mut error_spy);
         let tokens = scanner.scan_tokens();
 
         assert_eq!(tokens[0].kind, TokenKind::Identifier);
@@ -499,8 +498,8 @@ mod test
 
         for expected_token in expected_tokens
         {
-            let error_spy: ErrorSpy = ErrorSpy{line: 0, message: "".to_string(), had_error: false};
-            let mut scanner = Scanner::new(expected_token.key.to_string(), error_spy);
+            let mut error_spy: ErrorSpy = ErrorSpy{line: 0, message: "".to_string(), had_error: false};
+            let mut scanner = Scanner::new(expected_token.key, &mut error_spy);
             let tokens = scanner.scan_tokens();
 
             assert_eq!(expected_token.value, tokens[0].kind);
@@ -511,10 +510,10 @@ mod test
     #[test]
     fn should_get_error_notification()
     {
-        let error_spy: ErrorSpy = ErrorSpy{line: 0, message: "".to_string(), had_error: false};
+        let mut error_spy: ErrorSpy = ErrorSpy{line: 0, message: "".to_string(), had_error: false};
 
         // Cat emoji for invalid lexeme
-        let mut scanner = Scanner::new("🐱".to_string(), error_spy);
+        let mut scanner = Scanner::new("🐱", &mut error_spy);
         scanner.scan_tokens();
 
         assert_eq!(scanner.error_handler.had_error, true);
@@ -523,10 +522,10 @@ mod test
     #[test]
     fn should_get_unterminated_string_notification()
     {
-        let error_spy: ErrorSpy = ErrorSpy{line: 0, message: "".to_string(), had_error: false};
+        let mut error_spy: ErrorSpy = ErrorSpy{line: 0, message: "".to_string(), had_error: false};
 
         // Cat emoji for invalid lexeme
-        let mut scanner = Scanner::new("\"".to_string(), error_spy);
+        let mut scanner = Scanner::new("\"", &mut error_spy);
         scanner.scan_tokens();
 
         assert_eq!(scanner.error_handler.had_error, true);

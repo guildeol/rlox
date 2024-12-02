@@ -17,12 +17,12 @@ pub trait ProcessingErrorHandler
     }
 }
 
-pub struct ScannerErrorHandler
+pub struct ErrorHandler
 {
     had_error: bool,
 }
 
-impl ScannerErrorHandler
+impl ErrorHandler
 {
     pub fn new() -> Self
     {
@@ -30,30 +30,14 @@ impl ScannerErrorHandler
     }
 }
 
-impl ProcessingErrorHandler for ScannerErrorHandler
+impl ProcessingErrorHandler for ErrorHandler
 {
     fn scanning_error(&mut self, line: u32, message: &str)
     {
         report(line, "", message);
         self.had_error = true;
     }
-}
 
-pub struct ParserErrorHandler
-{
-    pub had_error: bool,
-}
-
-impl ParserErrorHandler
-{
-    pub fn new() -> Self
-    {
-        return Self{had_error: false};
-    }
-}
-
-impl ProcessingErrorHandler for ParserErrorHandler
-{
     fn parsing_error(&mut self, line: u32, location: &str, message: &str)
     {
         report(line, location, message);
