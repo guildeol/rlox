@@ -6,7 +6,7 @@ pub struct AstFormatter;
 
 impl AstFormatter
 {
-    fn format(&self, e: &Expr) -> String
+    pub fn format(&self, e: &Expr) -> String
     {
        return e.accept(self);
     }

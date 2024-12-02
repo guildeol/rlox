@@ -137,7 +137,7 @@ impl<ErrorHandler: ProcessingErrorHandler> Scanner<ErrorHandler>
 
         if self.is_at_end()
         {
-            self.error_handler.callback(self.line as u32, "Unterminated string.");
+            self.error_handler.scanning_error(self.line as u32, "Unterminated string.");
             return;
         }
 
@@ -178,7 +178,7 @@ impl<ErrorHandler: ProcessingErrorHandler> Scanner<ErrorHandler>
 
             Err(_) =>
             {
-                self.error_handler.callback(self.line, "Invalid number literal");
+                self.error_handler.scanning_error(self.line, "Invalid number literal");
             }
         }
     }
@@ -317,13 +317,13 @@ impl<ErrorHandler: ProcessingErrorHandler> Scanner<ErrorHandler>
                 }
                 else
                 {
-                    self.error_handler.callback(self.line as u32, "Unexpected character");
+                    self.error_handler.scanning_error(self.line as u32, "Unexpected character");
                 }
             }
 
             None =>
             {
-                self.error_handler.callback(self.line as u32, "No character retrieved")
+                self.error_handler.scanning_error(self.line as u32, "No character retrieved")
             }
         }
     }
@@ -332,6 +332,8 @@ impl<ErrorHandler: ProcessingErrorHandler> Scanner<ErrorHandler>
 #[cfg(test)]
 mod test
 {
+    use crate::error::ProcessingErrorHandler;
+
     use super::*;
 
     #[derive(Debug, PartialEq)]
@@ -344,7 +346,7 @@ mod test
 
     impl ProcessingErrorHandler for ErrorSpy
     {
-        fn callback(&mut self, line: u32, message: &str)
+        fn scanning_error(&mut self, line: u32, message: &str)
         {
             self.had_error = true;
             self.line = line;

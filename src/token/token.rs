@@ -3,7 +3,7 @@ use crate::token::types::Literal;
 
 use std::fmt::Display;
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Token
 {
     pub kind: TokenKind,

@@ -3,6 +3,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
+use ast::printer::AstFormatter;
 use clap::Parser as ClapParser;
 
 mod ast;
@@ -13,24 +14,7 @@ mod error;
 
 use scanner::Scanner;
 use parser::Parser;
-use error::ProcessingErrorHandler;
-struct ErrorHandler;
-
-impl ErrorHandler
-{
-    fn report(&mut self, line: u32, location: String, message: &str)
-    {
-        eprintln!("line {line} Error{location}: {message}");
-    }
-}
-
-impl ProcessingErrorHandler for ErrorHandler
-{
-    fn callback(&mut self, line: u32, message: &str)
-    {
-        self.report(line, "".to_string(), message);
-    }
-}
+use error::{ScannerErrorHandler, ParserErrorHandler};
 
 /// Rust based Lox language interpreter
 #[derive(ClapParser)]
@@ -64,16 +48,19 @@ fn main() -> ExitCode
 
 fn run_file(script_path: &PathBuf) -> ExitCode
 {
-    let error_handler: ErrorHandler = ErrorHandler{};
+    let content: String = fs::read_to_string(script_path).expect("Failed to read lox script");
 
-    let content: String = fs::read_to_string(script_path)
-                                .expect("Failed to read lox script");
-
-    let mut scanner = Scanner::new(content, error_handler);
-
+    let scanner_error_handler = ScannerErrorHandler::new();
+    let mut scanner = Scanner::new(content, scanner_error_handler);
     let tokens = scanner.scan_tokens();
 
-    let parser = Parser::new(tokens);
+    let parser_error_handler = ParserErrorHandler::new();
+    let mut parser = Parser::new(tokens, parser_error_handler);
+
+    let expr = parser.parse();
+
+    let printer = AstFormatter{};
+    println!("{}", printer.format(&expr.unwrap()));
 
     return ExitCode::SUCCESS;
 }
@@ -97,7 +84,7 @@ fn run_prompt() -> ExitCode
 
             Ok(_) =>
             {
-                let error_handler: ErrorHandler = ErrorHandler{};
+                let error_handler: ScannerErrorHandler = ScannerErrorHandler::new();
                 let trimmed_input = input.trim();
 
                 let mut scanner = Scanner::new(trimmed_input.to_string(), error_handler);
