@@ -52,7 +52,7 @@ fn run_file(script_path: &PathBuf) -> ExitCode {
     let expr = parser.parse();
 
     let printer = AstFormatter {};
-    if (expr.is_some()) {
+    if expr.is_some() {
         println!("{}", printer.format(&expr.unwrap()));
     }
 
@@ -84,7 +84,7 @@ fn run_prompt() -> ExitCode {
 
                 let printer = AstFormatter {};
 
-                if (expr.is_some()) {
+                if expr.is_some() {
                     println!("{}", printer.format(&expr.unwrap()));
                 }
 

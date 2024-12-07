@@ -214,7 +214,6 @@ impl<ErrorHandler: ProcessingErrorHandler> Parser<ErrorHandler> {
 
 #[cfg(test)]
 mod test {
-    use crate::ast::expr;
     use crate::error::ProcessingErrorHandler;
     use crate::scanner::Scanner;
 
