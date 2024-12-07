@@ -1,24 +1,20 @@
 use crate::ast::{Expr, Visitor};
-use crate::token::Token;
 use crate::token::types::Literal;
+use crate::token::Token;
 
 pub struct AstFormatter;
 
-impl AstFormatter
-{
-    pub fn format(&self, e: &Expr) -> String
-    {
-       return e.accept(self);
+impl AstFormatter {
+    pub fn format(&self, e: &Expr) -> String {
+        return e.accept(self);
     }
 
-    fn parenthesize(&self, name: &str, expressions: Vec<&Expr>) -> String
-    {
+    fn parenthesize(&self, name: &str, expressions: Vec<&Expr>) -> String {
         let mut builder = String::new();
 
         builder.push('(');
         builder.push_str(name);
-        for e in expressions
-        {
+        for e in expressions {
             builder.push(' ');
             builder.push_str(&e.accept(self));
         }
@@ -29,51 +25,44 @@ impl AstFormatter
     }
 }
 
-impl Visitor<String> for AstFormatter
-{
-    fn visit_binary_expr(&self, left: &Expr, operator: &Token, right: &Expr) -> String
-    {
+impl Visitor<String> for AstFormatter {
+    fn visit_binary_expr(&self, left: &Expr, operator: &Token, right: &Expr) -> String {
         return self.parenthesize(&operator.lexeme, vec![left, right]);
     }
 
-    fn visit_grouping_expr(&self, expression: &Expr) -> String
-    {
-        return self.parenthesize("group", vec![expression])
+    fn visit_grouping_expr(&self, expression: &Expr) -> String {
+        return self.parenthesize("group", vec![expression]);
     }
 
-    fn visit_literal_expr(&self, literal: &Literal) -> String
-    {
+    fn visit_literal_expr(&self, literal: &Literal) -> String {
         return format!("{}", literal);
     }
 
-    fn visit_unary_expr(&self, operator: &Token, right: &Expr) -> String
-    {
-        return self.parenthesize(&operator.lexeme, vec![right])
+    fn visit_unary_expr(&self, operator: &Token, right: &Expr) -> String {
+        return self.parenthesize(&operator.lexeme, vec![right]);
     }
 }
 
 #[cfg(test)]
-mod test
-{
+mod test {
     use crate::ast::*;
     use crate::token::types::Literal;
-    use crate::token::Token;
     use crate::token::types::TokenKind;
+    use crate::token::Token;
 
     #[test]
-    fn should_print_literal_expr()
-    {
-        struct LiteralReprPair
-        {
+    fn should_print_literal_expr() {
+        struct LiteralReprPair {
             lit: crate::ast::expr::Expr,
             repr: String,
         }
 
-        impl LiteralReprPair
-        {
-            fn new(lit: Literal, repr: &str) -> Self
-            {
-                return LiteralReprPair {lit: Expr::new_literal(lit), repr: repr.to_string()};
+        impl LiteralReprPair {
+            fn new(lit: Literal, repr: &str) -> Self {
+                return LiteralReprPair {
+                    lit: Expr::new_literal(lit),
+                    repr: repr.to_string(),
+                };
             }
         }
 
@@ -84,10 +73,9 @@ mod test
             LiteralReprPair::new(Literal::Nil, "Nil"),
         ];
 
-        let ast_formatter: AstFormatter = AstFormatter{};
+        let ast_formatter: AstFormatter = AstFormatter {};
 
-        for e in expressions
-        {
+        for e in expressions {
             let repr = ast_formatter.format(&e.lit);
 
             assert_eq!(repr, e.repr);
@@ -95,9 +83,8 @@ mod test
     }
 
     #[test]
-    fn should_print_unary_expr()
-    {
-        let ast_formatter: AstFormatter = AstFormatter{};
+    fn should_print_unary_expr() {
+        let ast_formatter: AstFormatter = AstFormatter {};
 
         let right = Expr::new_literal(Literal::Number(432.1));
         let unary_expr = &Expr::new_unary(Token::new(TokenKind::Minus, "-", None, 0), right);
@@ -108,9 +95,8 @@ mod test
     }
 
     #[test]
-    fn should_print_grouping_expr()
-    {
-        let ast_formatter: AstFormatter = AstFormatter{};
+    fn should_print_grouping_expr() {
+        let ast_formatter: AstFormatter = AstFormatter {};
 
         let right = Expr::new_literal(Literal::Number(432.1));
         let unary_expr = Expr::new_unary(Token::new(TokenKind::Minus, "-", None, 0), right);
@@ -123,9 +109,8 @@ mod test
     }
 
     #[test]
-    fn should_print_binary_expr()
-    {
-        let ast_formatter: AstFormatter = AstFormatter{};
+    fn should_print_binary_expr() {
+        let ast_formatter: AstFormatter = AstFormatter {};
 
         let minus = Token::new(TokenKind::Minus, "-", None, 0);
         let left = Expr::new_unary(minus, Expr::new_literal(Literal::Number(123.0)));
