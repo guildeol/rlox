@@ -1,4 +1,5 @@
 use crate::ast::expr::Expr;
+use crate::ast::stmt::Stmt;
 use crate::error::{ProcessingErrorHandler, RuntimeError};
 use crate::token::types::Literal;
 use crate::token::types::TokenKind;
@@ -19,12 +20,43 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Parser<'a, ErrorHandler> {
         };
     }
 
-    pub fn parse(&mut self) -> Result<Expr, RuntimeError> {
-        return self.expression();
+    pub fn parse(&mut self) -> Result<Vec<Stmt>, RuntimeError> {
+        let mut statements: Vec<Stmt> = Vec::new();
+
+        while !self.is_at_end() {
+            let s = self.statement()?;
+            statements.push(s);
+        }
+
+        return Ok(statements);
     }
 
     fn expression(&mut self) -> Result<Expr, RuntimeError> {
         return self.equality();
+    }
+
+    fn statement(&mut self) -> Result<Stmt, RuntimeError> {
+        if self.consume_if_one_of(vec![TokenKind::Print]) {
+            return self.print_statement();
+        }
+
+        return self.expression_statement();
+    }
+
+    fn print_statement(&mut self) -> Result<Stmt, RuntimeError> {
+        let expr = self.expression()?;
+
+        self.consume(TokenKind::Semicolon, "Expect ';' after value.")?;
+
+        return Ok(Stmt::new_print_stmt(expr));
+    }
+
+    fn expression_statement(&mut self) -> Result<Stmt, RuntimeError> {
+        let expr = self.expression()?;
+
+        self.consume(TokenKind::Semicolon, "Expect ';' after expression.")?;
+
+        return Ok(Stmt::new_expr_stmt(expr));
     }
 
     fn equality(&mut self) -> Result<Expr, RuntimeError> {
@@ -234,32 +266,38 @@ mod test {
     }
 
     impl ProcessingErrorHandler for ErrorSpy {
-        fn scanning_error(&mut self, _line: u32, _message: &str) {
-            todo!();
+        fn scanning_error(&mut self, _line: u32, message: &str) {
+            panic!("scanning_error: {}", message);
         }
 
-        fn parsing_error(&mut self, _line: u32, _location: &str, _message: &str) {
-            todo!();
+        fn parsing_error(&mut self, _line: u32, _location: &str, message: &str) {
+            panic!("parsing_error: {}", message);
         }
     }
 
     #[test]
     fn should_parse_expression() {
-        let mut scanner_error_handler = ErrorSpy::new();
-        let mut scanner = Scanner::new("1 + 2", &mut scanner_error_handler);
+        let mut error_handler = ErrorSpy::new();
+        let mut scanner = Scanner::new("1 + 2;", &mut error_handler);
 
         let tokens = scanner.scan_tokens();
-
-        let mut parser_error_handler = ErrorSpy::new();
-        let mut parser = Parser::new(tokens, &mut parser_error_handler);
+        let mut parser = Parser::new(tokens, &mut error_handler);
 
         match parser.parse() {
-            Ok(expr) => {
-                let left = Expr::new_literal(Literal::Number(1.0));
-                let operator = Token::new(TokenKind::Plus, "+", None, 1);
-                let right = Expr::new_literal(Literal::Number(2.0));
+            Ok(statements) => {
+                let stmt = &statements[0];
 
-                assert_eq!(expr, Expr::new_binary(left, operator, right));
+                match stmt {
+                    Stmt::ExprStmt { expr } => {
+                        let left = Expr::new_literal(Literal::Number(1.0));
+                        let operator = Token::new(TokenKind::Plus, "+", None, 1);
+                        let right = Expr::new_literal(Literal::Number(2.0));
+
+                        assert_eq!(**expr, Expr::new_binary(left, operator, right));
+                    }
+
+                    _ => panic!("Got non-expression statement"),
+                }
             }
 
             Err(error) => eprintln!("Parsing failed: {}", error),

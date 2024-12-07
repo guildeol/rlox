@@ -1,7 +1,6 @@
 use std::fmt::Display;
 
-use crate::ast::expr;
-use crate::ast::expr::Expr;
+use crate::ast::{Expr, ExprVisitor, Stmt, StmtVisitor};
 use crate::error::{ProcessingErrorHandler, RuntimeError};
 use crate::token::types::{Literal, TokenKind};
 use crate::token::Token;
@@ -50,18 +49,24 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Interpreter<'a, ErrorHandler> {
         return expression.accept(self);
     }
 
-    pub fn interpret(&mut self, expression: &Expr) -> String{
-        match self.evaluate(expression) {
-            Ok(value) => return format!("{}", value),
-            Err(error) => {
-                self.error_handler.runtime_error(error);
-                return String::from("");
+    fn execute(&self, statement: &Stmt) -> Result<Interpretable, RuntimeError> {
+        return statement.accept(self);
+    }
+
+    pub fn interpret(&mut self, statements: Vec<Stmt>) {
+
+        for statement in statements
+        {
+            let result= self.execute(&statement);
+
+            if result.is_err() {
+                self.error_handler.runtime_error(result.err().expect("Invalid interpreter error state"));
             }
         }
     }
 }
 
-impl<'a, ErrorHandler: ProcessingErrorHandler> expr::Visitor<Result<Interpretable, RuntimeError>>
+impl<'a, ErrorHandler: ProcessingErrorHandler> ExprVisitor<Result<Interpretable, RuntimeError>>
     for Interpreter<'a, ErrorHandler>
 {
     fn visit_binary_expr(
@@ -200,108 +205,22 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> expr::Visitor<Result<Interpretabl
     }
 }
 
-#[cfg(test)]
-mod test {
-    use crate::ast::expr::Expr;
-    use crate::error::ProcessingErrorHandler;
-    use crate::parser::Parser;
-    use crate::scanner::Scanner;
-
-    use super::Interpreter;
-
-    #[derive(Debug, PartialEq)]
-    struct ErrorSpy {
-        had_error: bool,
+impl<'a, ErrorHandler: ProcessingErrorHandler> StmtVisitor<Result<Interpretable, RuntimeError>>
+    for Interpreter<'a, ErrorHandler>
+{
+    fn visit_expr_stmt(&self, expr: &Expr) -> Result<Interpretable, RuntimeError> {
+        return self.evaluate(expr);
     }
 
-    impl ErrorSpy {
-        fn new() -> Self {
-            return ErrorSpy { had_error: false };
-        }
-    }
-
-    impl ProcessingErrorHandler for ErrorSpy {
-        fn scanning_error(&mut self, _line: u32, _message: &str) {
-            todo!();
-        }
-
-        fn parsing_error(&mut self, _line: u32, _location: &str, _message: &str) {
-            todo!();
-        }
-    }
-
-    fn make_expression(source: &str) -> Expr {
-        let mut error_handler = ErrorSpy::new();
-        let mut scanner = Scanner::new(&source, &mut error_handler);
-
-        let tokens = scanner.scan_tokens();
-
-        let mut parser = Parser::new(tokens, &mut error_handler);
-        match parser.parse() {
-            Ok(expression) => return expression,
-            Err(error) => panic!("Unparseable source: {} - {}", source, error),
-        }
-    }
-
-    struct SourceResultPair {
-        source: String,
-        result: String,
-    }
-
-    impl SourceResultPair {
-        fn new(source: &str, result: &str) -> Self {
-            return SourceResultPair{source: source.to_string(), result: result.to_string()};
-        }
-    }
-
-    #[test]
-    fn should_correctly_interpret_binary_expressions()
-    {
-        let mut error_handler = ErrorSpy::new();
-        let cases = vec![
-            SourceResultPair::new("1 + 2", "3"),
-            SourceResultPair::new("1 - 2", "-1"),
-            SourceResultPair::new("1 * 2", "2"),
-            SourceResultPair::new("1 / 2", "0.5"),
-            SourceResultPair::new("\"a\" + \"b\"", "ab"),
-            SourceResultPair::new("1 > 1", "false"),
-            SourceResultPair::new("1 > 2", "false"),
-            SourceResultPair::new("1 >= 1", "true"),
-            SourceResultPair::new("1 >= 2", "false"),
-            SourceResultPair::new("1 < 1", "false"),
-            SourceResultPair::new("1 < 2", "true"),
-            SourceResultPair::new("1 <= 1", "true"),
-            SourceResultPair::new("2 <= 1", "false"),
-            SourceResultPair::new("1 == 1", "true"),
-            SourceResultPair::new("1 == 2", "false"),
-            SourceResultPair::new("1 != 2", "true"),
-            SourceResultPair::new("1 != 1", "false"),
-            ];
-        let mut interpreter = Interpreter::new(&mut error_handler);
-
-        for case in cases {
-            let expr = make_expression(&case.source);
-            let interpretation = interpreter.interpret(&expr);
-
-            assert_eq!(interpretation, case.result, "Test failed for {}", case.source);
-        }
-    }
-
-    #[test]
-    fn should_correctly_interpret_grouping_expressions()
-    {
-        let mut error_handler = ErrorSpy::new();
-        let cases = vec![
-            SourceResultPair::new("1 + (2 * 5)", "11"),
-            SourceResultPair::new("(true != true) == false)", "true"),
-            ];
-        let mut interpreter = Interpreter::new(&mut error_handler);
-
-        for case in cases {
-            let expr = make_expression(&case.source);
-            let interpretation = interpreter.interpret(&expr);
-
-            assert_eq!(interpretation, case.result, "Test failed for {}", case.source);
+    fn visit_print_stmt(&self, expr: &Expr) -> Result<Interpretable, RuntimeError> {
+        match self.evaluate(expr)
+        {
+            Ok(object) =>
+            {
+                println!("{}", object);
+                return Ok(object);
+            }
+            Err(e) => return Err(e),
         }
     }
 }

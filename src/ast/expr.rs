@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use crate::token::{types::Literal, Token};
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Expr {
     Binary {
         left: Box<Expr>,
@@ -21,7 +21,7 @@ pub enum Expr {
     },
 }
 
-pub trait Visitor<R> {
+pub trait ExprVisitor<R> {
     fn visit_binary_expr(&self, left: &Expr, operator: &Token, right: &Expr) -> R;
     fn visit_grouping_expr(&self, expression: &Expr) -> R;
     fn visit_literal_expr(&self, value: &Literal) -> R;
@@ -54,7 +54,7 @@ impl Expr {
         };
     }
 
-    pub fn accept<R>(&self, visitor: &dyn Visitor<R>) -> R {
+    pub fn accept<R>(&self, visitor: &dyn ExprVisitor<R>) -> R {
         match self {
             Expr::Binary {
                 left,

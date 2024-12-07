@@ -1,5 +1,6 @@
 use std::fs;
 use std::io;
+use std::io::Write;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
@@ -55,11 +56,9 @@ fn run_file(script_path: &PathBuf) -> ExitCode {
 
     let mut parser = Parser::new(tokens, &mut error_handler);
     match parser.parse() {
-        Ok(expression) => {
+        Ok(statements) => {
             let mut interpreter = Interpreter::new(&mut error_handler);
-            let result = interpreter.interpret(&expression);
-
-            println!("{}", result);
+            let result = interpreter.interpret(statements);
         }
         Err(error) => eprintln!("{}", error),
     }
@@ -73,6 +72,8 @@ fn run_prompt() -> ExitCode {
 
     loop {
         print!("> ");
+        let _ = std::io::stdout().flush();
+
         match stdin.read_line(&mut input) {
             Ok(0) => {
                 // If read_line returns Ok(0), this means EOF was reached
@@ -89,11 +90,9 @@ fn run_prompt() -> ExitCode {
 
                 let mut parser = Parser::new(tokens, &mut error_handler);
                 match parser.parse() {
-                    Ok(expression) => {
+                    Ok(statements) => {
                         let mut interpreter = Interpreter::new(&mut error_handler);
-                        let result = interpreter.interpret(&expression);
-
-                        println!("{}", result);
+                        interpreter.interpret(statements);
                     }
                     Err(error) => eprintln!("{}", error),
                 }
