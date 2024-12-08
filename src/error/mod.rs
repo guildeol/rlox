@@ -1,20 +1,26 @@
 use std::fmt::Display;
 
+use crate::token::Token;
+
 fn report(line: u32, location: &str, message: &str) {
     eprintln!("line {line} Error{location}: {message}");
 }
 pub trait ProcessingErrorHandler {
     fn scanning_error(&mut self, _line: u32, _message: &str) {
-        panic!("scanning_error uninplemented!");
+        unimplemented!();
     }
 
     fn parsing_error(&mut self, _line: u32, _location: &str, _message: &str) {
-        panic!("parsing_error uninplemented!");
+        unimplemented!();
+    }
+
+    fn runtime_error(&mut self, _error: RuntimeError) {
+        unimplemented!();
     }
 }
 
 pub struct ErrorHandler {
-    had_error: bool,
+    pub had_error: bool,
 }
 
 impl ErrorHandler {
@@ -33,16 +39,35 @@ impl ProcessingErrorHandler for ErrorHandler {
         report(line, location, message);
         self.had_error = true;
     }
+
+    fn runtime_error(&mut self, error: RuntimeError) {
+        eprintln!("{}", error);
+        self.had_error = true;
+    }
 }
 
-pub enum Error {
-    Parse,
+pub enum RuntimeError {
+    Parse(String),
+    Interpreter(Token, String),
 }
 
-impl Display for Error {
+impl RuntimeError {
+    pub fn parse_error(message: &str) -> Self {
+        return RuntimeError::Parse(message.to_string());
+    }
+
+    pub fn interpreter_error(token: Token, message: &str) -> Self {
+        return RuntimeError::Interpreter(token, message.to_string());
+    }
+}
+
+impl Display for RuntimeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Error::Parse => write!(f, "ParseError"),
+            RuntimeError::Parse(msg) => write!(f, "ParseError: {}", msg),
+            RuntimeError::Interpreter(token, msg) => {
+                write!(f, "InterpretError: {}\n [line {}]", msg, token.line)
+            }
         }
     }
 }

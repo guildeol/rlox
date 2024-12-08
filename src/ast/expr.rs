@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::token::{types::Literal, Token};
 
 #[derive(Debug, PartialEq)]
@@ -62,6 +64,29 @@ impl Expr {
             Expr::Grouping { expression } => visitor.visit_grouping_expr(expression),
             Expr::LiteralValue { value } => visitor.visit_literal_expr(value),
             Expr::Unary { operator, right } => visitor.visit_unary_expr(operator, right),
+        }
+    }
+}
+
+impl Display for Expr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Expr::Binary {
+                left,
+                operator,
+                right,
+            } => {
+                write!(f, "({} {} {})", operator.lexeme, left, right)
+            }
+            Expr::Grouping { expression } => {
+                write!(f, "(group {})", expression)
+            }
+            Expr::LiteralValue { value } => {
+                write!(f, "{}", value)
+            }
+            Expr::Unary { operator, right } => {
+                write!(f, "({} {})", operator.lexeme, right)
+            }
         }
     }
 }

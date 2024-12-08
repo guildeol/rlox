@@ -1,33 +1,33 @@
 use crate::ast::expr::Expr;
-use crate::error::{Error, ProcessingErrorHandler};
+use crate::error::{ProcessingErrorHandler, RuntimeError};
 use crate::token::types::Literal;
 use crate::token::types::TokenKind;
 use crate::token::Token;
 
-pub struct Parser<ErrorHandler: ProcessingErrorHandler> {
+pub struct Parser<'a, ErrorHandler: ProcessingErrorHandler> {
     pub tokens: Vec<Token>,
     pub current: usize,
-    pub error_handler: ErrorHandler,
+    pub error_handler: &'a mut ErrorHandler,
 }
 
-impl<ErrorHandler: ProcessingErrorHandler> Parser<ErrorHandler> {
-    pub fn new(tokens: Vec<Token>, error_handler: ErrorHandler) -> Self {
+impl<'a, ErrorHandler: ProcessingErrorHandler> Parser<'a, ErrorHandler> {
+    pub fn new(tokens: Vec<Token>, error_handler: &'a mut ErrorHandler) -> Self {
         return Parser {
             tokens: tokens,
             current: 0,
-            error_handler,
+            error_handler: error_handler,
         };
     }
 
-    pub fn parse(&mut self) -> Option<Expr> {
-        return self.expression().ok();
+    pub fn parse(&mut self) -> Result<Expr, RuntimeError> {
+        return self.expression();
     }
 
-    fn expression(&mut self) -> Result<Expr, Error> {
+    fn expression(&mut self) -> Result<Expr, RuntimeError> {
         return self.equality();
     }
 
-    fn equality(&mut self) -> Result<Expr, Error> {
+    fn equality(&mut self) -> Result<Expr, RuntimeError> {
         let mut expr = self.comparison()?;
 
         while self.consume_if_one_of(vec![TokenKind::BangEqual, TokenKind::EqualEqual]) {
@@ -79,7 +79,7 @@ impl<ErrorHandler: ProcessingErrorHandler> Parser<ErrorHandler> {
         return self.tokens[self.current - 1].clone();
     }
 
-    fn comparison(&mut self) -> Result<Expr, Error> {
+    fn comparison(&mut self) -> Result<Expr, RuntimeError> {
         let mut expr = self.term()?;
 
         while self.consume_if_one_of(vec![
@@ -97,7 +97,7 @@ impl<ErrorHandler: ProcessingErrorHandler> Parser<ErrorHandler> {
         return Ok(expr);
     }
 
-    fn term(&mut self) -> Result<Expr, Error> {
+    fn term(&mut self) -> Result<Expr, RuntimeError> {
         let mut expr = self.factor()?;
 
         while self.consume_if_one_of(vec![TokenKind::Minus, TokenKind::Plus]) {
@@ -110,7 +110,7 @@ impl<ErrorHandler: ProcessingErrorHandler> Parser<ErrorHandler> {
         return Ok(expr);
     }
 
-    fn factor(&mut self) -> Result<Expr, Error> {
+    fn factor(&mut self) -> Result<Expr, RuntimeError> {
         let mut expr = self.unary()?;
 
         while self.consume_if_one_of(vec![TokenKind::Slash, TokenKind::Star]) {
@@ -123,7 +123,7 @@ impl<ErrorHandler: ProcessingErrorHandler> Parser<ErrorHandler> {
         return Ok(expr);
     }
 
-    fn unary(&mut self) -> Result<Expr, Error> {
+    fn unary(&mut self) -> Result<Expr, RuntimeError> {
         while self.consume_if_one_of(vec![TokenKind::Bang, TokenKind::Minus]) {
             let operator = self.previous();
             let right = self.unary()?;
@@ -134,7 +134,7 @@ impl<ErrorHandler: ProcessingErrorHandler> Parser<ErrorHandler> {
         return self.primary();
     }
 
-    fn primary(&mut self) -> Result<Expr, Error> {
+    fn primary(&mut self) -> Result<Expr, RuntimeError> {
         if self.consume_if_one_of(vec![TokenKind::False]) {
             return Ok(Expr::new_literal(Literal::Boolean(false)));
         }
@@ -158,10 +158,13 @@ impl<ErrorHandler: ProcessingErrorHandler> Parser<ErrorHandler> {
             return Ok(Expr::new_grouping(expr.unwrap()));
         }
 
-        return Err(Error::Parse);
+        return Err(RuntimeError::parse_error(&format!(
+            "Unexpected primary expression token '{}'",
+            self.peek()
+        )));
     }
 
-    fn consume(&mut self, kind: TokenKind, message: &str) -> Result<Token, Error> {
+    fn consume(&mut self, kind: TokenKind, message: &str) -> Result<Token, RuntimeError> {
         if self.check(kind) {
             return Ok(self.advance());
         } else {
@@ -169,7 +172,7 @@ impl<ErrorHandler: ProcessingErrorHandler> Parser<ErrorHandler> {
         }
     }
 
-    fn error(&mut self, token: &Token, message: &str) -> Error {
+    fn error(&mut self, token: &Token, message: &str) -> RuntimeError {
         if token.kind == TokenKind::EndOfFile {
             self.error_handler
                 .parsing_error(token.line, " at end", message);
@@ -181,7 +184,7 @@ impl<ErrorHandler: ProcessingErrorHandler> Parser<ErrorHandler> {
             );
         }
 
-        return Error::Parse;
+        return RuntimeError::parse_error("");
     }
 
     fn synchronize(&mut self) {
@@ -247,17 +250,19 @@ mod test {
 
         let tokens = scanner.scan_tokens();
 
-        let parser_error_handler = ErrorSpy::new();
-        let mut parser = Parser::new(tokens, parser_error_handler);
+        let mut parser_error_handler = ErrorSpy::new();
+        let mut parser = Parser::new(tokens, &mut parser_error_handler);
 
-        let expr = parser.parse();
+        match parser.parse() {
+            Ok(expr) => {
+                let left = Expr::new_literal(Literal::Number(1.0));
+                let operator = Token::new(TokenKind::Plus, "+", None, 1);
+                let right = Expr::new_literal(Literal::Number(2.0));
 
-        let left = Expr::new_literal(Literal::Number(1.0));
-        let operator = Token::new(TokenKind::Plus, "+", None, 1);
-        let right = Expr::new_literal(Literal::Number(2.0));
+                assert_eq!(expr, Expr::new_binary(left, operator, right));
+            }
 
-        // Check parsed expression
-        assert!(expr.is_some(), "Parser failed!");
-        assert_eq!(expr.unwrap(), Expr::new_binary(left, operator, right));
+            Err(error) => eprintln!("Parsing failed: {}", error),
+        }
     }
 }

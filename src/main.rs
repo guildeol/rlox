@@ -3,7 +3,6 @@ use std::io;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use ast::printer::AstFormatter;
 use clap::Parser as ClapParser;
 
 mod ast;
@@ -14,6 +13,7 @@ mod scanner;
 mod token;
 
 use error::ErrorHandler;
+use interpreter::interpreter::Interpreter;
 use parser::Parser;
 use scanner::Scanner;
 
@@ -49,12 +49,19 @@ fn run_file(script_path: &PathBuf) -> ExitCode {
     let mut scanner = Scanner::new(&content, &mut error_handler);
     let tokens = scanner.scan_tokens();
 
-    let mut parser = Parser::new(tokens, error_handler);
-    let expr = parser.parse();
+    if error_handler.had_error {
+        return ExitCode::FAILURE;
+    }
 
-    let printer = AstFormatter {};
-    if expr.is_some() {
-        println!("{}", printer.format(&expr.unwrap()));
+    let mut parser = Parser::new(tokens, &mut error_handler);
+    match parser.parse() {
+        Ok(expression) => {
+            let mut interpreter = Interpreter::new(&mut error_handler);
+            let result = interpreter.interpret(&expression);
+
+            println!("{}", result);
+        }
+        Err(error) => eprintln!("{}", error),
     }
 
     return ExitCode::SUCCESS;
@@ -80,13 +87,15 @@ fn run_prompt() -> ExitCode {
                 let mut scanner = Scanner::new(trimmed_input, &mut error_handler);
                 let tokens = scanner.scan_tokens();
 
-                let mut parser = Parser::new(tokens, error_handler);
-                let expr = parser.parse();
+                let mut parser = Parser::new(tokens, &mut error_handler);
+                match parser.parse() {
+                    Ok(expression) => {
+                        let mut interpreter = Interpreter::new(&mut error_handler);
+                        let result = interpreter.interpret(&expression);
 
-                let printer = AstFormatter {};
-
-                if expr.is_some() {
-                    println!("{}", printer.format(&expr.unwrap()));
+                        println!("{}", result);
+                    }
+                    Err(error) => eprintln!("{}", error),
                 }
 
                 input.clear();
