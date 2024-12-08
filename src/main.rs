@@ -8,6 +8,7 @@ use clap::Parser as ClapParser;
 
 mod ast;
 mod error;
+mod interpreter;
 mod parser;
 mod scanner;
 mod token;
