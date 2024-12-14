@@ -24,8 +24,13 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Parser<'a, ErrorHandler> {
         let mut statements: Vec<Stmt> = Vec::new();
 
         while !self.is_at_end() {
-            let s = self.statement()?;
-            statements.push(s);
+            match self.declaration() {
+                Ok(s) => statements.push(s),
+                Err(_) => {
+                    self.synchronize();
+                    return Ok(vec![]);
+                }
+            }
         }
 
         return Ok(statements);
@@ -33,6 +38,14 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Parser<'a, ErrorHandler> {
 
     fn expression(&mut self) -> Result<Expr, RuntimeError> {
         return self.equality();
+    }
+
+    fn declaration(&mut self) -> Result<Stmt, RuntimeError> {
+        if self.consume_if_one_of(vec![TokenKind::Var]) {
+            return self.var_declaration();
+        }
+
+        return self.statement();
     }
 
     fn statement(&mut self) -> Result<Stmt, RuntimeError> {
@@ -49,6 +62,19 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Parser<'a, ErrorHandler> {
         self.consume(TokenKind::Semicolon, "Expect ';' after value.")?;
 
         return Ok(Stmt::new_print_stmt(expr));
+    }
+
+    fn var_declaration(&mut self) -> Result<Stmt, RuntimeError> {
+        let name = self.consume(TokenKind::Identifier, "Expect variable name")?;
+
+        let mut initializer: Option<Expr> = None;
+        if self.consume_if(TokenKind::Equal) {
+            initializer = Some(self.expression()?);
+        }
+
+        self.consume(TokenKind::Semicolon, "Expect ';' after variable declaration.")?;
+
+        return Ok(Stmt::new_var_stmt(name, initializer));
     }
 
     fn expression_statement(&mut self) -> Result<Stmt, RuntimeError> {
@@ -70,6 +96,15 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Parser<'a, ErrorHandler> {
         }
 
         return Ok(expr);
+    }
+
+    fn consume_if(&mut self, candidate: TokenKind) -> bool {
+        if self.check(candidate) {
+            self.advance();
+            return true;
+        }
+
+        return false;
     }
 
     fn consume_if_one_of(&mut self, candidates: Vec<TokenKind>) -> bool {
@@ -167,15 +202,15 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Parser<'a, ErrorHandler> {
     }
 
     fn primary(&mut self) -> Result<Expr, RuntimeError> {
-        if self.consume_if_one_of(vec![TokenKind::False]) {
+        if self.consume_if(TokenKind::False) {
             return Ok(Expr::new_literal(Literal::Boolean(false)));
         }
 
-        if self.consume_if_one_of(vec![TokenKind::True]) {
+        if self.consume_if(TokenKind::True) {
             return Ok(Expr::new_literal(Literal::Boolean(true)));
         }
 
-        if self.consume_if_one_of(vec![TokenKind::Nil]) {
+        if self.consume_if(TokenKind::Nil) {
             return Ok(Expr::new_literal(Literal::Nil));
         }
 
@@ -184,10 +219,14 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Parser<'a, ErrorHandler> {
             return Ok(Expr::new_literal(prev.literal.unwrap()));
         }
 
-        if self.consume_if_one_of(vec![TokenKind::LeftParen]) {
+        if self.consume_if(TokenKind::LeftParen) {
             let expr = self.expression().ok();
             self.consume(TokenKind::RightParen, "Expect ')' after expression.")?;
             return Ok(Expr::new_grouping(expr.unwrap()));
+        }
+
+        if self.consume_if(TokenKind::Identifier) {
+            return Ok(Expr::new_variable(self.previous()));
         }
 
         return Err(RuntimeError::parse_error(&format!(
@@ -206,14 +245,10 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Parser<'a, ErrorHandler> {
 
     fn error(&mut self, token: &Token, message: &str) -> RuntimeError {
         if token.kind == TokenKind::EndOfFile {
-            self.error_handler
-                .parsing_error(token.line, " at end", message);
+            self.error_handler.parsing_error(token.line, " at end", message);
         } else {
-            self.error_handler.parsing_error(
-                token.line,
-                &format!("at '{}'", token.lexeme),
-                message,
-            );
+            self.error_handler
+                .parsing_error(token.line, &format!(" at '{}'", token.lexeme), message);
         }
 
         return RuntimeError::parse_error("");

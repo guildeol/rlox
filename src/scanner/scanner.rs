@@ -65,11 +65,7 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Scanner<'a, ErrorHandler> {
             return '\0';
         };
 
-        return self
-            .source
-            .chars()
-            .nth(self.current)
-            .expect("Ran out of characters!");
+        return self.source.chars().nth(self.current).expect("Ran out of characters!");
     }
 
     fn peek_next(&mut self) -> char {
@@ -77,11 +73,7 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Scanner<'a, ErrorHandler> {
             return '\0';
         }
 
-        return self
-            .source
-            .chars()
-            .nth(self.current + 1)
-            .expect("Ran out of characters!");
+        return self.source.chars().nth(self.current + 1).expect("Ran out of characters!");
     }
 
     fn get_string_literal(&mut self) {
@@ -94,18 +86,14 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Scanner<'a, ErrorHandler> {
         }
 
         if self.is_at_end() {
-            self.error_handler
-                .scanning_error(self.line as u32, "Unterminated string.");
+            self.error_handler.scanning_error(self.line as u32, "Unterminated string.");
             return;
         }
 
         self.advance();
         let literal: &str = &self.source[self.start + 1..self.current - 1];
 
-        self.add_token(
-            TokenKind::String,
-            Some(Literal::String(literal.to_string())),
-        );
+        self.add_token(TokenKind::String, Some(Literal::String(literal.to_string())));
     }
 
     fn get_number_literal(&mut self) {
@@ -132,8 +120,7 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Scanner<'a, ErrorHandler> {
             }
 
             Err(_) => {
-                self.error_handler
-                    .scanning_error(self.line, "Invalid number literal");
+                self.error_handler.scanning_error(self.line, "Invalid number literal");
             }
         }
     }
@@ -237,14 +224,11 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Scanner<'a, ErrorHandler> {
                 } else if c.is_ascii_alphabetic() {
                     self.get_identifier();
                 } else {
-                    self.error_handler
-                        .scanning_error(self.line as u32, "Unexpected character");
+                    self.error_handler.scanning_error(self.line as u32, "Unexpected character");
                 }
             }
 
-            None => self
-                .error_handler
-                .scanning_error(self.line as u32, "No character retrieved"),
+            None => self.error_handler.scanning_error(self.line as u32, "No character retrieved"),
         }
     }
 }

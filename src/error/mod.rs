@@ -66,7 +66,7 @@ impl Display for RuntimeError {
         match self {
             RuntimeError::Parse(msg) => write!(f, "ParseError: {}", msg),
             RuntimeError::Interpreter(token, msg) => {
-                write!(f, "InterpretError: {}\n [line {}]", msg, token.line)
+                write!(f, "[line {}] InterpretError: {} ", token.line, msg)
             }
         }
     }

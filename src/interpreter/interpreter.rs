@@ -5,8 +5,10 @@ use crate::error::{ProcessingErrorHandler, RuntimeError};
 use crate::token::types::{Literal, TokenKind};
 use crate::token::Token;
 
-#[derive(PartialEq)]
-enum Interpretable {
+use super::environment::Environment;
+
+#[derive(Clone, PartialEq)]
+pub enum Interpretable {
     String(String),
     Number(f64),
     Boolean(bool),
@@ -35,12 +37,14 @@ impl Display for Interpretable {
 }
 
 pub struct Interpreter<'a, ErrorHandler: ProcessingErrorHandler> {
+    environment: &'a mut Environment,
     error_handler: &'a mut ErrorHandler,
 }
 
 impl<'a, ErrorHandler: ProcessingErrorHandler> Interpreter<'a, ErrorHandler> {
-    pub fn new(error_handler: &'a mut ErrorHandler) -> Self {
+    pub fn new(env: &'a mut Environment, error_handler: &'a mut ErrorHandler) -> Self {
         return Interpreter {
+            environment: env,
             error_handler: error_handler,
         };
     }
@@ -49,65 +53,41 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Interpreter<'a, ErrorHandler> {
         return expression.accept(self);
     }
 
-    fn execute(&self, statement: &Stmt) -> Result<Interpretable, RuntimeError> {
+    fn execute(&mut self, statement: &Stmt) -> Result<Interpretable, RuntimeError> {
         return statement.accept(self);
     }
 
     pub fn interpret(&mut self, statements: Vec<Stmt>) {
-
-        for statement in statements
-        {
-            let result= self.execute(&statement);
+        for statement in statements {
+            let result = self.execute(&statement);
 
             if result.is_err() {
-                self.error_handler.runtime_error(result.err().expect("Invalid interpreter error state"));
+                self.error_handler
+                    .runtime_error(result.err().expect("Invalid interpreter error state"));
             }
         }
     }
 }
 
-impl<'a, ErrorHandler: ProcessingErrorHandler> ExprVisitor<Result<Interpretable, RuntimeError>>
-    for Interpreter<'a, ErrorHandler>
-{
-    fn visit_binary_expr(
-        &self,
-        left: &Expr,
-        operator: &Token,
-        right: &Expr,
-    ) -> Result<Interpretable, RuntimeError> {
+impl<'a, ErrorHandler: ProcessingErrorHandler> ExprVisitor<Result<Interpretable, RuntimeError>> for Interpreter<'a, ErrorHandler> {
+    fn visit_binary_expr(&self, left: &Expr, operator: &Token, right: &Expr) -> Result<Interpretable, RuntimeError> {
         let l_eval = self.evaluate(left)?;
         let r_eval = self.evaluate(right)?;
 
         match (&operator.kind, l_eval, r_eval) {
-            (
-                TokenKind::Minus,
-                Interpretable::Number(left_number),
-                Interpretable::Number(right_number),
-            ) => {
+            (TokenKind::Minus, Interpretable::Number(left_number), Interpretable::Number(right_number)) => {
                 return Ok(Interpretable::Number(left_number - right_number));
             }
 
-            (
-                TokenKind::Star,
-                Interpretable::Number(left_number),
-                Interpretable::Number(right_number),
-            ) => {
+            (TokenKind::Star, Interpretable::Number(left_number), Interpretable::Number(right_number)) => {
                 return Ok(Interpretable::Number(left_number * right_number));
             }
 
-            (
-                TokenKind::Slash,
-                Interpretable::Number(left_number),
-                Interpretable::Number(right_number),
-            ) => {
+            (TokenKind::Slash, Interpretable::Number(left_number), Interpretable::Number(right_number)) => {
                 return Ok(Interpretable::Number(left_number / right_number));
             }
 
-            (
-                TokenKind::Plus,
-                Interpretable::Number(left_number),
-                Interpretable::Number(right_number),
-            ) => {
+            (TokenKind::Plus, Interpretable::Number(left_number), Interpretable::Number(right_number)) => {
                 return Ok(Interpretable::Number(left_number + right_number));
             }
 
@@ -115,35 +95,19 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> ExprVisitor<Result<Interpretable,
                 return Ok(Interpretable::String(format!("{}{}", s_left, s_right)));
             }
 
-            (
-                TokenKind::Greater,
-                Interpretable::Number(left_number),
-                Interpretable::Number(right_number),
-            ) => {
+            (TokenKind::Greater, Interpretable::Number(left_number), Interpretable::Number(right_number)) => {
                 return Ok(Interpretable::Boolean(left_number > right_number));
             }
 
-            (
-                TokenKind::GreaterEqual,
-                Interpretable::Number(left_number),
-                Interpretable::Number(right_number),
-            ) => {
+            (TokenKind::GreaterEqual, Interpretable::Number(left_number), Interpretable::Number(right_number)) => {
                 return Ok(Interpretable::Boolean(left_number >= right_number));
             }
 
-            (
-                TokenKind::Less,
-                Interpretable::Number(left_number),
-                Interpretable::Number(right_number),
-            ) => {
+            (TokenKind::Less, Interpretable::Number(left_number), Interpretable::Number(right_number)) => {
                 return Ok(Interpretable::Boolean(left_number < right_number));
             }
 
-            (
-                TokenKind::LessEqual,
-                Interpretable::Number(left_number),
-                Interpretable::Number(right_number),
-            ) => {
+            (TokenKind::LessEqual, Interpretable::Number(left_number), Interpretable::Number(right_number)) => {
                 return Ok(Interpretable::Boolean(left_number <= right_number));
             }
 
@@ -158,10 +122,7 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> ExprVisitor<Result<Interpretable,
             (_, _, _) => {
                 return Err(RuntimeError::interpreter_error(
                     operator.clone(),
-                    &format!(
-                        "Invalid operands {} and {} to operator '{}'",
-                        left, right, operator.lexeme
-                    ),
+                    &format!("Invalid operands {} and {} to operator '{}'", left, right, operator.lexeme),
                 ));
             }
         }
@@ -180,11 +141,7 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> ExprVisitor<Result<Interpretable,
         }
     }
 
-    fn visit_unary_expr(
-        &self,
-        operator: &Token,
-        expr: &Expr,
-    ) -> Result<Interpretable, RuntimeError> {
+    fn visit_unary_expr(&self, operator: &Token, expr: &Expr) -> Result<Interpretable, RuntimeError> {
         let right = self.evaluate(expr)?;
 
         match operator.kind {
@@ -203,24 +160,34 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> ExprVisitor<Result<Interpretable,
             _ => unreachable!("Tried to match unexpected operator for unary expression."),
         }
     }
+
+    fn visit_variable_expr(&self, name: &Token) -> Result<Interpretable, RuntimeError> {
+        return self.environment.get(name);
+    }
 }
 
-impl<'a, ErrorHandler: ProcessingErrorHandler> StmtVisitor<Result<Interpretable, RuntimeError>>
-    for Interpreter<'a, ErrorHandler>
-{
+impl<'a, ErrorHandler: ProcessingErrorHandler> StmtVisitor<Result<Interpretable, RuntimeError>> for Interpreter<'a, ErrorHandler> {
     fn visit_expr_stmt(&self, expr: &Expr) -> Result<Interpretable, RuntimeError> {
         return self.evaluate(expr);
     }
 
     fn visit_print_stmt(&self, expr: &Expr) -> Result<Interpretable, RuntimeError> {
-        match self.evaluate(expr)
-        {
-            Ok(object) =>
-            {
+        match self.evaluate(expr) {
+            Ok(object) => {
                 println!("{}", object);
                 return Ok(object);
             }
             Err(e) => return Err(e),
         }
+    }
+
+    fn visit_var_stmt(&mut self, name: &Token, initializer: &Option<Expr>) -> Result<Interpretable, RuntimeError> {
+        let mut value: Interpretable = Interpretable::Nil;
+        if initializer.is_some() {
+            value = self.evaluate(initializer.as_ref().unwrap())?;
+        }
+
+        self.environment.define(name.lexeme.clone(), value);
+        return Ok(Interpretable::Nil);
     }
 }

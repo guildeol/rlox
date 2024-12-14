@@ -14,7 +14,7 @@ mod scanner;
 mod token;
 
 use error::ErrorHandler;
-use interpreter::interpreter::Interpreter;
+use interpreter::{Environment, Interpreter};
 use parser::Parser;
 use scanner::Scanner;
 
@@ -57,8 +57,10 @@ fn run_file(script_path: &PathBuf) -> ExitCode {
     let mut parser = Parser::new(tokens, &mut error_handler);
     match parser.parse() {
         Ok(statements) => {
-            let mut interpreter = Interpreter::new(&mut error_handler);
-            let result = interpreter.interpret(statements);
+            let mut env = Environment::new();
+            let mut interpreter = Interpreter::new(&mut env, &mut error_handler);
+
+            interpreter.interpret(statements);
         }
         Err(error) => eprintln!("{}", error),
     }
@@ -69,6 +71,9 @@ fn run_file(script_path: &PathBuf) -> ExitCode {
 fn run_prompt() -> ExitCode {
     let stdin = io::stdin();
     let mut input = String::new();
+
+    let mut env = Environment::new();
+    let mut error_handler: ErrorHandler = ErrorHandler::new();
 
     loop {
         print!("> ");
@@ -82,7 +87,6 @@ fn run_prompt() -> ExitCode {
             }
 
             Ok(_) => {
-                let mut error_handler: ErrorHandler = ErrorHandler::new();
                 let trimmed_input = input.trim();
 
                 let mut scanner = Scanner::new(trimmed_input, &mut error_handler);
@@ -91,7 +95,7 @@ fn run_prompt() -> ExitCode {
                 let mut parser = Parser::new(tokens, &mut error_handler);
                 match parser.parse() {
                     Ok(statements) => {
-                        let mut interpreter = Interpreter::new(&mut error_handler);
+                        let mut interpreter = Interpreter::new(&mut env, &mut error_handler);
                         interpreter.interpret(statements);
                     }
                     Err(error) => eprintln!("{}", error),

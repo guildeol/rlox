@@ -7,9 +7,6 @@ pub struct Keyword {
 
 impl Keyword {
     pub const fn new(lexeme: &'static str, kind: TokenKind) -> Self {
-        return Keyword {
-            key: lexeme,
-            value: kind,
-        };
+        return Keyword { key: lexeme, value: kind };
     }
 }
