@@ -2,7 +2,7 @@ import subprocess
 
 RLOX_EXECUTABLE = './target/debug/rlox'
 
-class repl:
+class rlox:
     SUCCESS = 0
 
     @staticmethod

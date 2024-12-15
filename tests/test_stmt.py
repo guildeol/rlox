@@ -1,43 +1,42 @@
 import pytest
+from tests.rlox import rlox
 
-from repl import repl
+def assert_success(result, stdout, expected_stdout):
+    """Helper function to check successful execution and expected output."""
+    assert result == rlox.SUCCESS, 'Statement evaluation finished with unexpected result'
+    assert stdout.strip() == expected_stdout
+
+def assert_failure(result, stderr):
+    assert result != rlox.SUCCESS
+    assert stderr != '', "Code failed without error message!"
 
 def test_should_print_binary_expr():
-    result, stdout, _ = repl.run('print 1 + 2;')
-    assert(result == repl.SUCCESS), 'Statement evaluation finished with unexpected result'
-    assert(stdout == '3')
+    result, stdout, _ = rlox.run('print 1 + 2;')
+    assert_success(result, stdout, '3')
 
 def test_should_print_grouping_expr():
-    result, stdout, _ = repl.run('print 5 * (1 + 2);')
-    assert(result == repl.SUCCESS), 'Statement evaluation finished with unexpected result'
-    assert(stdout == '15')
+    result, stdout, _ = rlox.run('print 5 * (1 + 2);')
+    assert_success(result, stdout, '15')
 
 def test_should_print_unary_expr():
-    result, stdout, _ = repl.run('print -5789;')
-    assert(result == repl.SUCCESS), 'Statement evaluation finished with unexpected result'
-    assert(stdout == '-5789')
+    result, stdout, _ = rlox.run('print -5789;')
+    assert_success(result, stdout, '-5789')
 
 def test_should_print_uninitialized_variable():
-    source = 'var a;' \
-             'print a;'
-
-    result, stdout, _ = repl.run(source)
-    assert(result == repl.SUCCESS), 'Statement evaluation finished with unexpected result'
-    assert(stdout == 'nil')
+    source = 'var a;\nprint a;'
+    result, stdout, _ = rlox.run(source)
+    assert_success(result, stdout, 'nil')
 
 def test_should_print_initialized_variable():
-    source = 'var a = 12;' \
-             'print a;'
-
-    result, stdout, _ = repl.run(source)
-    assert(result == repl.SUCCESS), 'Statement evaluation finished with unexpected result'
-    assert(stdout == '12')
+    source = 'var a = 12;\nprint a;'
+    result, stdout, _ = rlox.run(source)
+    assert_success(result, stdout, '12')
 
 def test_should_reassign_variable():
-    source = 'var a = 12;'          \
-             'a = "Another thing";' \
-             'print a;'
+    source = 'var a = 12;\na = "Another thing";\nprint a;'
+    result, stdout, _ = rlox.run(source)
+    assert_success(result, stdout, 'Another thing')
 
-    result, stdout, _ = repl.run(source)
-    assert(result == repl.SUCCESS), 'Statement evaluation finished with unexpected result'
-    assert(stdout == 'Another thing')
+def test_should_handle_syntax_error():
+    result, _, stderr = rlox.run('print unterminated_statement')
+    assert_failure(result, stderr)

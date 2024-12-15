@@ -38,5 +38,4 @@ jobs:
       run: cargo test --verbose
 
     - name: Run Integration tests
-      run: cargo test --verbose
-
+      run: python -m pytest
