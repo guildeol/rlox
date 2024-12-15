@@ -10,7 +10,7 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
+  build-and-test:
     runs-on: ubuntu-latest
 
     steps:
@@ -18,24 +18,15 @@ jobs:
     - name: Build
       run: cargo build --verbose
 
-  test:
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/checkout@v4
-
-    # Step to set up Python
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: "3.x"  # Specify the Python version
-
-    # Step to install dependencies from requirements.txt
-    - name: Install Python dependencies
-      run: pip install -r requirements.txt
-
     - name: Run Unit tests
       run: cargo test --verbose
 
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.x"
+
     - name: Run Integration tests
-      run: python -m pytest
+      run: |
+        pip install -r requirements.txt
+        python -m pytest
