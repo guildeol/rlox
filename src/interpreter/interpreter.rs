@@ -1,3 +1,4 @@
+use std::io::Write;
 use std::fmt::Display;
 
 use crate::ast::{Expr, ExprVisitor, Stmt, StmtVisitor};
@@ -180,6 +181,7 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> StmtVisitor<Result<Interpretable,
         match self.evaluate(expr) {
             Ok(object) => {
                 println!("{}", object);
+                let _ = std::io::stdout().flush();
                 return Ok(object);
             }
             Err(e) => return Err(e),

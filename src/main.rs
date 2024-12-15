@@ -31,13 +31,9 @@ fn main() -> ExitCode {
 
     match &args.script {
         Some(script_path) => {
-            println!("Running script: {:?}", script_path);
-            // Call your function to run the file here
             return run_file(script_path);
         }
         None => {
-            println!("No script provided, entering interactive mode.");
-            // Call your function to run the prompt here
             return run_prompt();
         }
     }
@@ -82,7 +78,6 @@ fn run_prompt() -> ExitCode {
         match stdin.read_line(&mut input) {
             Ok(0) => {
                 // If read_line returns Ok(0), this means EOF was reached
-                println!("EOF reached. Exiting...");
                 return ExitCode::SUCCESS;
             }
 
