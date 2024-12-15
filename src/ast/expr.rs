@@ -22,14 +22,19 @@ pub enum Expr {
     Variable {
         name: Token,
     },
+    Assignment {
+        name: Token,
+        value: Box<Expr>,
+    },
 }
 
 pub trait ExprVisitor<R> {
-    fn visit_binary_expr(&self, left: &Expr, operator: &Token, right: &Expr) -> R;
-    fn visit_grouping_expr(&self, expression: &Expr) -> R;
-    fn visit_literal_expr(&self, value: &Literal) -> R;
-    fn visit_unary_expr(&self, operator: &Token, right: &Expr) -> R;
-    fn visit_variable_expr(&self, name: &Token) -> R;
+    fn visit_binary_expr(&mut self, left: &Expr, operator: &Token, right: &Expr) -> R;
+    fn visit_grouping_expr(&mut self, expression: &Expr) -> R;
+    fn visit_literal_expr(&mut self, value: &Literal) -> R;
+    fn visit_unary_expr(&mut self, operator: &Token, right: &Expr) -> R;
+    fn visit_variable_expr(&mut self, name: &Token) -> R;
+    fn visit_assignment_expr(&mut self, name: &Token, value: &Expr) -> R;
 }
 
 impl Expr {
@@ -62,13 +67,21 @@ impl Expr {
         return Expr::Variable { name: name };
     }
 
-    pub fn accept<R>(&self, visitor: &dyn ExprVisitor<R>) -> R {
+    pub fn new_assignment(name: Token, value: Expr) -> Self {
+        return Expr::Assignment {
+            name: name,
+            value: Box::new(value),
+        };
+    }
+
+    pub fn accept<R>(&self, visitor: &mut dyn ExprVisitor<R>) -> R {
         match self {
             Expr::Binary { left, operator, right } => visitor.visit_binary_expr(left, operator, right),
             Expr::Grouping { expression } => visitor.visit_grouping_expr(expression),
             Expr::LiteralValue { value } => visitor.visit_literal_expr(value),
             Expr::Unary { operator, right } => visitor.visit_unary_expr(operator, right),
             Expr::Variable { name } => visitor.visit_variable_expr(name),
+            Expr::Assignment { name, value } => visitor.visit_assignment_expr(name, value),
         }
     }
 }
@@ -90,6 +103,9 @@ impl Display for Expr {
             }
             Expr::Variable { name } => {
                 return write!(f, "{}", name);
+            }
+            Expr::Assignment { name, value } => {
+                return write!(f, "{} = {}", name, value);
             }
         }
     }

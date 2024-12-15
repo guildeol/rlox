@@ -49,7 +49,7 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Interpreter<'a, ErrorHandler> {
         };
     }
 
-    fn evaluate(&self, expression: &Expr) -> Result<Interpretable, RuntimeError> {
+    fn evaluate(&mut self, expression: &Expr) -> Result<Interpretable, RuntimeError> {
         return expression.accept(self);
     }
 
@@ -70,7 +70,7 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Interpreter<'a, ErrorHandler> {
 }
 
 impl<'a, ErrorHandler: ProcessingErrorHandler> ExprVisitor<Result<Interpretable, RuntimeError>> for Interpreter<'a, ErrorHandler> {
-    fn visit_binary_expr(&self, left: &Expr, operator: &Token, right: &Expr) -> Result<Interpretable, RuntimeError> {
+    fn visit_binary_expr(&mut self, left: &Expr, operator: &Token, right: &Expr) -> Result<Interpretable, RuntimeError> {
         let l_eval = self.evaluate(left)?;
         let r_eval = self.evaluate(right)?;
 
@@ -128,11 +128,11 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> ExprVisitor<Result<Interpretable,
         }
     }
 
-    fn visit_grouping_expr(&self, expression: &Expr) -> Result<Interpretable, RuntimeError> {
+    fn visit_grouping_expr(&mut self, expression: &Expr) -> Result<Interpretable, RuntimeError> {
         return self.evaluate(expression);
     }
 
-    fn visit_literal_expr(&self, value: &Literal) -> Result<Interpretable, RuntimeError> {
+    fn visit_literal_expr(&mut self, value: &Literal) -> Result<Interpretable, RuntimeError> {
         match value {
             Literal::Number(n) => return Ok(Interpretable::Number(*n)),
             Literal::Boolean(b) => return Ok(Interpretable::Boolean(*b)),
@@ -141,7 +141,7 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> ExprVisitor<Result<Interpretable,
         }
     }
 
-    fn visit_unary_expr(&self, operator: &Token, expr: &Expr) -> Result<Interpretable, RuntimeError> {
+    fn visit_unary_expr(&mut self, operator: &Token, expr: &Expr) -> Result<Interpretable, RuntimeError> {
         let right = self.evaluate(expr)?;
 
         match operator.kind {
@@ -161,17 +161,22 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> ExprVisitor<Result<Interpretable,
         }
     }
 
-    fn visit_variable_expr(&self, name: &Token) -> Result<Interpretable, RuntimeError> {
+    fn visit_variable_expr(&mut self, name: &Token) -> Result<Interpretable, RuntimeError> {
         return self.environment.get(name);
+    }
+
+    fn visit_assignment_expr(&mut self, name: &Token, expr: &Expr) -> Result<Interpretable, RuntimeError> {
+        let value = self.evaluate(expr)?;
+        return self.environment.assign(name, value);
     }
 }
 
 impl<'a, ErrorHandler: ProcessingErrorHandler> StmtVisitor<Result<Interpretable, RuntimeError>> for Interpreter<'a, ErrorHandler> {
-    fn visit_expr_stmt(&self, expr: &Expr) -> Result<Interpretable, RuntimeError> {
+    fn visit_expr_stmt(&mut self, expr: &Expr) -> Result<Interpretable, RuntimeError> {
         return self.evaluate(expr);
     }
 
-    fn visit_print_stmt(&self, expr: &Expr) -> Result<Interpretable, RuntimeError> {
+    fn visit_print_stmt(&mut self, expr: &Expr) -> Result<Interpretable, RuntimeError> {
         match self.evaluate(expr) {
             Ok(object) => {
                 println!("{}", object);

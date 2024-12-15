@@ -22,6 +22,18 @@ impl Environment {
         }
     }
 
+    pub fn assign(&mut self, name: &Token, value: Interpretable) -> Result<Interpretable, RuntimeError> {
+        if self.values.contains_key(&name.lexeme) {
+            self.values.insert(name.lexeme.to_string(), value.clone());
+            return Ok(value);
+        } else {
+            return Err(RuntimeError::interpreter_error(
+                name.clone(),
+                &format!("Undefined variable '{}'.", name.lexeme),
+            ));
+        }
+    }
+
     pub fn define(&mut self, name: String, value: Interpretable) {
         self.values.insert(name, value);
     }

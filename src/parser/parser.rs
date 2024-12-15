@@ -37,7 +37,7 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Parser<'a, ErrorHandler> {
     }
 
     fn expression(&mut self) -> Result<Expr, RuntimeError> {
-        return self.equality();
+        return self.assignment();
     }
 
     fn declaration(&mut self) -> Result<Stmt, RuntimeError> {
@@ -83,6 +83,26 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Parser<'a, ErrorHandler> {
         self.consume(TokenKind::Semicolon, "Expect ';' after expression.")?;
 
         return Ok(Stmt::new_expr_stmt(expr));
+    }
+
+    fn assignment(&mut self) -> Result<Expr, RuntimeError> {
+        let expr = self.equality()?;
+
+        if self.consume_if(TokenKind::Equal) {
+            let equals = self.previous();
+            let value = self.assignment()?;
+
+            match expr {
+                Expr::Variable { name } => {
+                    return Ok(Expr::new_assignment(name, value));
+                }
+                _ => {
+                    return Err(self.error(&equals, "Invalid assignment target."));
+                }
+            }
+        }
+
+        return Ok(expr);
     }
 
     fn equality(&mut self) -> Result<Expr, RuntimeError> {

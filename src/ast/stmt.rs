@@ -9,8 +9,8 @@ pub enum Stmt {
 }
 
 pub trait StmtVisitor<R> {
-    fn visit_expr_stmt(&self, expr: &Expr) -> R;
-    fn visit_print_stmt(&self, expr: &Expr) -> R;
+    fn visit_expr_stmt(&mut self, expr: &Expr) -> R;
+    fn visit_print_stmt(&mut self, expr: &Expr) -> R;
     fn visit_var_stmt(&mut self, name: &Token, initializer: &Option<Expr>) -> R;
 }
 
