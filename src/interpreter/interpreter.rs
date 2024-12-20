@@ -1,12 +1,14 @@
-use std::io::Write;
+use std::rc::Rc;
+use std::cell::{Ref, RefCell};
 use std::fmt::Display;
+use std::io::Write;
 
 use crate::ast::{Expr, ExprVisitor, Stmt, StmtVisitor};
 use crate::error::{ProcessingErrorHandler, RuntimeError};
 use crate::token::types::{Literal, TokenKind};
 use crate::token::Token;
 
-use super::environment::Environment;
+use super::{Enclosing, Environment};
 
 #[derive(Clone, PartialEq)]
 pub enum Interpretable {
@@ -29,7 +31,7 @@ impl Interpretable {
 impl Display for Interpretable {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Interpretable::String(s) => write!(f, "{}", s),
+            Interpretable::String(s) => write!(f, "\"{}\"", s),
             Interpretable::Number(n) => write!(f, "{}", n),
             Interpretable::Boolean(b) => write!(f, "{}", b),
             Interpretable::Nil => write!(f, "nil"),
@@ -38,14 +40,14 @@ impl Display for Interpretable {
 }
 
 pub struct Interpreter<'a, ErrorHandler: ProcessingErrorHandler> {
-    environment: &'a mut Environment,
+    environment: Enclosing,
     error_handler: &'a mut ErrorHandler,
 }
 
 impl<'a, ErrorHandler: ProcessingErrorHandler> Interpreter<'a, ErrorHandler> {
-    pub fn new(env: &'a mut Environment, error_handler: &'a mut ErrorHandler) -> Self {
+    pub fn new(error_handler: &'a mut ErrorHandler) -> Self {
         return Interpreter {
-            environment: env,
+            environment: Rc::new(RefCell::new(Environment::new())),
             error_handler: error_handler,
         };
     }
@@ -56,6 +58,19 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Interpreter<'a, ErrorHandler> {
 
     fn execute(&mut self, statement: &Stmt) -> Result<Interpretable, RuntimeError> {
         return statement.accept(self);
+    }
+
+    fn execute_block(&mut self, statements: &Vec<Stmt>, environment: Enclosing) -> Result<Interpretable, RuntimeError> {
+        let previous = &self.environment.clone();
+
+        self.environment = environment;
+        for statement in statements {
+            self.execute(statement)?;
+        }
+
+        self.environment = previous.clone();
+
+        return Ok(Interpretable::Nil);
     }
 
     pub fn interpret(&mut self, statements: Vec<Stmt>) {
@@ -163,12 +178,12 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> ExprVisitor<Result<Interpretable,
     }
 
     fn visit_variable_expr(&mut self, name: &Token) -> Result<Interpretable, RuntimeError> {
-        return self.environment.get(name);
+        return self.environment.borrow().get(name);
     }
 
     fn visit_assignment_expr(&mut self, name: &Token, expr: &Expr) -> Result<Interpretable, RuntimeError> {
         let value = self.evaluate(expr)?;
-        return self.environment.assign(name, value);
+        return self.environment.borrow_mut().assign(name, value);
     }
 }
 
@@ -194,7 +209,11 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> StmtVisitor<Result<Interpretable,
             value = self.evaluate(initializer.as_ref().unwrap())?;
         }
 
-        self.environment.define(name.lexeme.clone(), value);
+        self.environment.borrow_mut().define(name.lexeme.clone(), value);
         return Ok(Interpretable::Nil);
+    }
+
+    fn visit_block_stmt(&mut self, declarations: &Vec<Stmt>) -> Result<Interpretable, RuntimeError> {
+        return self.execute_block(declarations, Rc::new(RefCell::new(Environment::from(&self.environment))));
     }
 }

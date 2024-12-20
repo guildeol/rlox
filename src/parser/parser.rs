@@ -49,8 +49,14 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Parser<'a, ErrorHandler> {
     }
 
     fn statement(&mut self) -> Result<Stmt, RuntimeError> {
-        if self.consume_if_one_of(vec![TokenKind::Print]) {
+        if self.consume_if(TokenKind::Print) {
             return self.print_statement();
+        }
+
+        if self.consume_if(TokenKind::LeftBrace) {
+            let declarations = self.block()?;
+
+            return Ok(Stmt::new_block_stmt(declarations));
         }
 
         return self.expression_statement();
@@ -75,6 +81,18 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Parser<'a, ErrorHandler> {
         self.consume(TokenKind::Semicolon, "Expect ';' after variable declaration.")?;
 
         return Ok(Stmt::new_var_stmt(name, initializer));
+    }
+
+    fn block(&mut self) -> Result<Vec<Stmt>, RuntimeError> {
+        let mut statements: Vec<Stmt> = Vec::new();
+
+        while !self.check(TokenKind::RightBrace) && !self.is_at_end() {
+            statements.push(self.declaration()?);
+        }
+
+        self.consume(TokenKind::RightBrace, "Expect '}' after block.")?;
+
+        return Ok(statements);
     }
 
     fn expression_statement(&mut self) -> Result<Stmt, RuntimeError> {
