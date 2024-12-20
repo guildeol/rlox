@@ -14,7 +14,7 @@ mod scanner;
 mod token;
 
 use error::ErrorHandler;
-use interpreter::{Environment, Interpreter};
+use interpreter::Interpreter;
 use parser::Parser;
 use scanner::Scanner;
 

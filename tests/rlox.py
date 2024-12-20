@@ -4,6 +4,7 @@ RLOX_EXECUTABLE = './target/debug/rlox'
 
 class rlox:
     SUCCESS = 0
+    FAILURE = 1
 
     @staticmethod
     def run(expr: str):

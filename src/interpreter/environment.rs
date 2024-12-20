@@ -1,45 +1,88 @@
-use std::cell::{Ref, RefCell};
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::token::Token;
 use crate::{error::RuntimeError, interpreter::Interpretable};
 
-pub type Enclosing = Rc<RefCell<Environment>>;
-
+#[derive(Clone)]
 pub struct Environment {
-    values: HashMap<String, Interpretable>,
-    enclosing: Option<Enclosing>,
+    values: ValueMap,
+    pub enclosing: Option<Rc<RefCell<ValueMap>>>,
 }
 
 impl Environment {
     pub fn new() -> Self {
-        return Environment { values: HashMap::new(), enclosing: None };
+        return Environment {
+            values: ValueMap::new(),
+            enclosing: None,
+        };
     }
 
-    pub fn from(enclosing: &Enclosing) -> Self {
-        return Environment {values: HashMap::new(), enclosing: Some(Rc::clone(enclosing))};
+    pub fn from(parent: &Environment) -> Self {
+        return Environment {
+            values: ValueMap::new(),
+            enclosing: parent.enclosing.as_ref().map(Rc::clone),
+        };
     }
 
     pub fn get(&self, name: &Token) -> Result<Interpretable, RuntimeError> {
-        match self.values.get(&name.lexeme) {
-            Some(value) => Ok(value.clone()),
-            None => Err(RuntimeError::interpreter_error(
-                name.clone(),
-                &format!("Undefined variable '{}'.", name.lexeme),
-            )),
+        if let Some(v) = self.values.get(name) {
+            return Ok(v.clone());
         }
+
+        if let Some(e) = &self.enclosing {
+            return Ok(e.borrow().get(name).unwrap().clone());
+        }
+
+        Err(RuntimeError::interpreter_error(
+            name.clone(),
+            &format!("Undefined variable '{}'.", name.lexeme),
+        ))
     }
 
-    pub fn assign(&mut self, name: &Token, value: Interpretable) -> Result<Interpretable, RuntimeError> {
+
+    pub fn assign(&mut self, name: &Token, value: &Interpretable) -> Result<Interpretable, RuntimeError> {
+        if let Some(v) = self.values.assign(name, value) {
+            // Found in the current environment
+            return Ok(v.clone());
+        }
+
+        if let Some(e) = &self.enclosing {
+            return Ok(e.borrow_mut().assign(name, value).unwrap().clone());
+        }
+
+        Err(RuntimeError::interpreter_error(
+            name.clone(),
+            &format!("Undefined variable '{}'.", name.lexeme),
+        ))
+    }
+
+    pub fn define(&mut self, name: String, value: Interpretable) {
+        return self.values.define(name, value);
+    }
+}
+
+#[derive(Clone)]
+pub struct ValueMap {
+    values: HashMap<String, Interpretable>,
+}
+
+impl ValueMap {
+    pub fn new() -> Self {
+        return ValueMap { values: HashMap::new() };
+    }
+
+    pub fn get(&self, name: &Token) -> Option<&Interpretable> {
+        return self.values.get(&name.lexeme);
+    }
+
+    pub fn assign(&mut self, name: &Token, value: &Interpretable) -> Option<Interpretable> {
         if self.values.contains_key(&name.lexeme) {
-            self.values.insert(name.lexeme.to_string(), value.clone());
-            return Ok(value);
-        } else {
-            return Err(RuntimeError::interpreter_error(
-                name.clone(),
-                &format!("Undefined variable '{}'.", name.lexeme),
-            ));
+            return self.values.insert(name.lexeme.to_string(), value.clone());
+        }
+        else {
+            return None;
         }
     }
 

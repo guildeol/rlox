@@ -20,11 +20,11 @@ def test_should_reassign_variable():
     assert rlox.succeeded(result, stdout, ['"Another thing"'])
 
 def test_should_shadow_variable():
-    source = 'var a = 52;           \n'\
-             '{                     \n'\
-             '  var a = "Shadow";   \n'\
-             '  print a;            \n'\
-             '}                     \n'\
+    source = 'var a = 52;           \n' \
+             '{                     \n' \
+             '  var a = "Shadow";   \n' \
+             '  print a;            \n' \
+             '}                     \n' \
              'print a;'
 
     result, stdout, _ = rlox.run(source)
