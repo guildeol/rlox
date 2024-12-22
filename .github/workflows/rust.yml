@@ -15,18 +15,19 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    - name: Build
-      run: cargo build --verbose
-
-    - name: Run Unit tests
-      run: cargo test --verbose
-
-    - name: Set up Python
-      uses: actions/setup-python@v4
+    - uses: extractions/setup-just@v2
+    - uses: actions/setup-python@v4
       with:
         python-version: "3.x"
 
+    - name: Setup
+      run: just setup
+
+    - name: Build
+      run: just build
+
+    - name: Run Unit tests
+      run: just unit-tests
+
     - name: Run Integration tests
-      run: |
-        pip install -r requirements.txt
-        python -m pytest
+      run: just integration-tests
