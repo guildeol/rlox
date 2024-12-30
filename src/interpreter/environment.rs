@@ -8,7 +8,7 @@ use crate::{error::RuntimeError, interpreter::Interpretable};
 #[derive(Clone)]
 pub struct Environment {
     values: ValueMap,
-    pub enclosing: Option<Rc<RefCell<ValueMap>>>,
+    pub enclosing: Option<Rc<RefCell<Environment>>>,
 }
 
 impl Environment {
@@ -22,7 +22,7 @@ impl Environment {
     pub fn from(parent: &Environment) -> Self {
         return Environment {
             values: ValueMap::new(),
-            enclosing: parent.enclosing.as_ref().map(Rc::clone),
+            enclosing: Some(Rc::new(RefCell::new(parent.clone()))),
         };
     }
 
@@ -32,7 +32,7 @@ impl Environment {
         }
 
         if let Some(e) = &self.enclosing {
-            return Ok(e.borrow().get(name).unwrap().clone());
+            return e.borrow().get(name);
         }
 
         Err(RuntimeError::interpreter_error(
@@ -49,7 +49,7 @@ impl Environment {
         }
 
         if let Some(e) = &self.enclosing {
-            return Ok(e.borrow_mut().assign(name, value).unwrap().clone());
+            return e.borrow_mut().assign(name, value);
         }
 
         Err(RuntimeError::interpreter_error(

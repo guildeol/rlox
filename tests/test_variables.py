@@ -29,3 +29,13 @@ def test_should_shadow_variable():
 
     result, stdout, _ = rlox.run(source)
     assert rlox.succeeded(result, stdout, ['"Shadow"', '52' ])
+
+def test_should_get_enclosed_variable():
+    source = 'var a = "outer";     \n' \
+             '{                     \n' \
+             '  print a;            \n' \
+             '}                     \n' \
+             'print a;'
+
+    result, stdout, _ = rlox.run(source)
+    assert rlox.succeeded(result, stdout, ['"outer"', '"outer"' ])
