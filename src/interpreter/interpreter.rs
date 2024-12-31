@@ -190,6 +190,19 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> StmtVisitor<Result<Interpretable,
         return self.evaluate(expr);
     }
 
+    fn visit_if_stmt(&mut self, condition: &Expr, then_branch: &Stmt, else_branch: &Option<Stmt>) -> Result<Interpretable, RuntimeError> {
+        let predicate = self.evaluate(condition)?;
+        if predicate.is_truthy() {
+            return self.execute(then_branch);
+        }
+        else if let Some(else_stmt) = else_branch
+        {
+            return self.execute(else_stmt);
+        }
+
+        return Ok(Interpretable::Nil);
+    }
+
     fn visit_print_stmt(&mut self, expr: &Expr) -> Result<Interpretable, RuntimeError> {
         match self.evaluate(expr) {
             Ok(object) => {

@@ -41,7 +41,6 @@ impl Environment {
         ))
     }
 
-
     pub fn assign(&mut self, name: &Token, value: &Interpretable) -> Result<Interpretable, RuntimeError> {
         if let Some(v) = self.values.assign(name, value) {
             // Found in the current environment
@@ -80,8 +79,7 @@ impl ValueMap {
     pub fn assign(&mut self, name: &Token, value: &Interpretable) -> Option<Interpretable> {
         if self.values.contains_key(&name.lexeme) {
             return self.values.insert(name.lexeme.to_string(), value.clone());
-        }
-        else {
+        } else {
             return None;
         }
     }

@@ -49,17 +49,33 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Parser<'a, ErrorHandler> {
     }
 
     fn statement(&mut self) -> Result<Stmt, RuntimeError> {
-        if self.consume_if(TokenKind::Print) {
+        if self.consume_if(TokenKind::If) {
+            return self.if_statement();
+        } else if self.consume_if(TokenKind::Print) {
             return self.print_statement();
-        }
-
-        if self.consume_if(TokenKind::LeftBrace) {
+        } else if self.consume_if(TokenKind::LeftBrace) {
             let declarations = self.block()?;
 
             return Ok(Stmt::new_block_stmt(declarations));
         }
 
         return self.expression_statement();
+    }
+
+    fn if_statement(&mut self) -> Result<Stmt, RuntimeError> {
+        self.consume(TokenKind::LeftParen, "Expect '(' after 'if'.")?;
+
+        let condition = self.expression()?;
+
+        self.consume(TokenKind::RightParen, "Expect '(' after 'if condition.")?;
+
+        let then_branch = self.statement()?;
+        let mut else_branch: Option<Stmt> = None;
+        if self.consume_if(TokenKind::Else) {
+            else_branch = Some(self.statement()?);
+        }
+
+        return Ok(Stmt::new_if_stmt(condition, then_branch, else_branch));
     }
 
     fn print_statement(&mut self) -> Result<Stmt, RuntimeError> {
