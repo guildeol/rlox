@@ -183,6 +183,31 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> ExprVisitor<Result<Interpretable,
         let value = self.evaluate(expr)?;
         return self.environment.assign(name, &value);
     }
+
+    fn visit_logical_expr(&mut self, left: &Expr, operator: &Token, right: &Expr) -> Result<Interpretable, RuntimeError> {
+        let left_eval = self.evaluate(left)?;
+
+        let is_truthy = left_eval.is_truthy();
+
+        // Handle short-circuit cases
+        match operator.kind {
+            TokenKind::And => {
+                if !is_truthy {
+                    return Ok(left_eval);
+                }
+            }
+
+            TokenKind::Or => {
+                if is_truthy {
+                    return Ok(left_eval);
+                }
+            }
+
+            _ => panic!("Unexpected logical operator {}", operator.lexeme),
+        }
+
+        return self.evaluate(right);
+    }
 }
 
 impl<'a, ErrorHandler: ProcessingErrorHandler> StmtVisitor<Result<Interpretable, RuntimeError>> for Interpreter<'a, ErrorHandler> {
@@ -194,9 +219,7 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> StmtVisitor<Result<Interpretable,
         let predicate = self.evaluate(condition)?;
         if predicate.is_truthy() {
             return self.execute(then_branch);
-        }
-        else if let Some(else_stmt) = else_branch
-        {
+        } else if let Some(else_stmt) = else_branch {
             return self.execute(else_stmt);
         }
 

@@ -120,7 +120,7 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Parser<'a, ErrorHandler> {
     }
 
     fn assignment(&mut self) -> Result<Expr, RuntimeError> {
-        let expr = self.equality()?;
+        let expr = self.or()?;
 
         if self.consume_if(TokenKind::Equal) {
             let equals = self.previous();
@@ -134,6 +134,32 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Parser<'a, ErrorHandler> {
                     return Err(self.error(&equals, "Invalid assignment target."));
                 }
             }
+        }
+
+        return Ok(expr);
+    }
+
+    fn or(&mut self) -> Result<Expr, RuntimeError> {
+        let mut expr = self.and()?;
+
+        while self.consume_if(TokenKind::Or) {
+            let operator = self.previous();
+            let right = self.and()?;
+
+            expr = Expr::new_logical(expr, operator, right);
+        }
+
+        return Ok(expr);
+    }
+
+    fn and(&mut self) -> Result<Expr, RuntimeError> {
+        let mut expr = self.equality()?;
+
+        while self.consume_if(TokenKind::And) {
+            let operator = self.previous();
+            let right = self.equality()?;
+
+            expr = Expr::new_logical(expr, operator, right);
         }
 
         return Ok(expr);

@@ -26,6 +26,11 @@ pub enum Expr {
         name: Token,
         value: Box<Expr>,
     },
+    Logical {
+        left: Box<Expr>,
+        operator: Token,
+        right: Box<Expr>,
+    },
 }
 
 pub trait ExprVisitor<R> {
@@ -35,6 +40,7 @@ pub trait ExprVisitor<R> {
     fn visit_unary_expr(&mut self, operator: &Token, right: &Expr) -> R;
     fn visit_variable_expr(&mut self, name: &Token) -> R;
     fn visit_assignment_expr(&mut self, name: &Token, value: &Expr) -> R;
+    fn visit_logical_expr(&mut self, left: &Expr, operator: &Token, right: &Expr) -> R;
 }
 
 impl Expr {
@@ -74,6 +80,14 @@ impl Expr {
         };
     }
 
+    pub fn new_logical(left: Expr, operator: Token, right: Expr) -> Self {
+        return Expr::Logical {
+            left: Box::new(left),
+            operator,
+            right: Box::new(right),
+        };
+    }
+
     pub fn accept<R>(&self, visitor: &mut dyn ExprVisitor<R>) -> R {
         match self {
             Expr::Binary { left, operator, right } => visitor.visit_binary_expr(left, operator, right),
@@ -82,6 +96,7 @@ impl Expr {
             Expr::Unary { operator, right } => visitor.visit_unary_expr(operator, right),
             Expr::Variable { name } => visitor.visit_variable_expr(name),
             Expr::Assignment { name, value } => visitor.visit_assignment_expr(name, value),
+            Expr::Logical { left, operator, right } => visitor.visit_logical_expr(left, operator, right),
         }
     }
 }
@@ -106,6 +121,9 @@ impl Display for Expr {
             }
             Expr::Assignment { name, value } => {
                 return write!(f, "{} = {}", name, value);
+            }
+            Expr::Logical { left, operator, right } => {
+                return write!(f, "{} {} {}", left, operator.lexeme, right);
             }
         }
     }
