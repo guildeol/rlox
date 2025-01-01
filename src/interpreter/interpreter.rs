@@ -1,5 +1,7 @@
+use std::cell::RefCell;
 use std::fmt::Display;
 use std::io::Write;
+use std::rc::Rc;
 
 use crate::ast::{Expr, ExprVisitor, Stmt, StmtVisitor};
 use crate::error::{ProcessingErrorHandler, RuntimeError};
@@ -8,7 +10,7 @@ use crate::token::Token;
 
 use super::Environment;
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Interpretable {
     String(String),
     Number(f64),
@@ -38,14 +40,14 @@ impl Display for Interpretable {
 }
 
 pub struct Interpreter<'a, ErrorHandler: ProcessingErrorHandler> {
-    environment: Environment,
+    environment: Rc<RefCell<Environment>>,
     error_handler: &'a mut ErrorHandler,
 }
 
 impl<'a, ErrorHandler: ProcessingErrorHandler> Interpreter<'a, ErrorHandler> {
     pub fn new(error_handler: &'a mut ErrorHandler) -> Self {
         return Interpreter {
-            environment: Environment::new(),
+            environment: Rc::new(RefCell::new(Environment::new())),
             error_handler: error_handler,
         };
     }
@@ -61,7 +63,7 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Interpreter<'a, ErrorHandler> {
     fn execute_block(&mut self, statements: &Vec<Stmt>, enclosing: Environment) -> Result<Interpretable, RuntimeError> {
         let previous = self.environment.clone();
 
-        self.environment = enclosing;
+        self.environment = Rc::new(RefCell::new(enclosing));
         for statement in statements {
             self.execute(statement)?;
         }
@@ -176,12 +178,12 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> ExprVisitor<Result<Interpretable,
     }
 
     fn visit_variable_expr(&mut self, name: &Token) -> Result<Interpretable, RuntimeError> {
-        return self.environment.get(name);
+        return self.environment.borrow().get(name);
     }
 
     fn visit_assignment_expr(&mut self, name: &Token, expr: &Expr) -> Result<Interpretable, RuntimeError> {
         let value = self.evaluate(expr)?;
-        return self.environment.assign(name, &value);
+        return self.environment.borrow_mut().assign(name, &value);
     }
 
     fn visit_logical_expr(&mut self, left: &Expr, operator: &Token, right: &Expr) -> Result<Interpretable, RuntimeError> {
@@ -243,11 +245,31 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> StmtVisitor<Result<Interpretable,
             value = self.evaluate(initializer.as_ref().unwrap())?;
         }
 
-        self.environment.define(name.lexeme.clone(), value);
+        self.environment.borrow_mut().define(name.lexeme.clone(), value);
+        return Ok(Interpretable::Nil);
+    }
+
+    fn visit_while_stmt(&mut self, condition: &Expr, body: &Stmt) -> Result<Interpretable, RuntimeError> {
+        let mut predicate: Interpretable;
+
+        loop {
+            predicate = self.evaluate(condition)?;
+
+            if predicate.is_truthy() {
+                let _ = self.execute(body)?;
+            } else {
+                break;
+            }
+        }
+
         return Ok(Interpretable::Nil);
     }
 
     fn visit_block_stmt(&mut self, declarations: &Vec<Stmt>) -> Result<Interpretable, RuntimeError> {
-        return self.execute_block(declarations, Environment::from(&self.environment));
+        // Create a new block environment using the current environment as its parent
+        let block_environment = Environment::from(Rc::clone(&self.environment));
+
+        // Execute the block
+        self.execute_block(declarations, block_environment)
     }
 }

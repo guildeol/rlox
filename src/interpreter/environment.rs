@@ -19,10 +19,10 @@ impl Environment {
         };
     }
 
-    pub fn from(parent: &Environment) -> Self {
+    pub fn from(parent: Rc<RefCell<Environment>>) -> Self {
         return Environment {
             values: ValueMap::new(),
-            enclosing: Some(Rc::new(RefCell::new(parent.clone()))),
+            enclosing: Some(parent),
         };
     }
 

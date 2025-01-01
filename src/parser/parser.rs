@@ -53,6 +53,8 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Parser<'a, ErrorHandler> {
             return self.if_statement();
         } else if self.consume_if(TokenKind::Print) {
             return self.print_statement();
+        } else if self.consume_if(TokenKind::While) {
+            return self.while_statement();
         } else if self.consume_if(TokenKind::LeftBrace) {
             let declarations = self.block()?;
 
@@ -97,6 +99,18 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Parser<'a, ErrorHandler> {
         self.consume(TokenKind::Semicolon, "Expect ';' after variable declaration.")?;
 
         return Ok(Stmt::new_var_stmt(name, initializer));
+    }
+
+    fn while_statement(&mut self) -> Result<Stmt, RuntimeError> {
+        self.consume(TokenKind::LeftParen, "Expect '(' after 'while'.")?;
+
+        let condition = self.expression()?;
+
+        self.consume(TokenKind::RightParen, "Expect ')' after condition.")?;
+
+        let body = self.statement()?;
+
+        return Ok(Stmt::new_while_stmt(condition, body));
     }
 
     fn block(&mut self) -> Result<Vec<Stmt>, RuntimeError> {
