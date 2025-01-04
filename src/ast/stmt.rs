@@ -1,7 +1,7 @@
 use crate::ast::Expr;
 use crate::token::Token;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(PartialEq)]
 pub enum Stmt {
     ExprStmt {
         expr: Box<Expr>,
