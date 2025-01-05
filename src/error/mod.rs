@@ -46,6 +46,7 @@ impl ProcessingErrorHandler for ErrorHandler {
     }
 }
 
+#[derive(Debug)]
 pub enum RuntimeError {
     Parse(String),
     Interpreter(Token, String),

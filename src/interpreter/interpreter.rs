@@ -4,10 +4,12 @@ use std::io::Write;
 use std::rc::Rc;
 
 use crate::ast::{Expr, ExprVisitor, Stmt, StmtVisitor};
-use crate::error::{ProcessingErrorHandler, RuntimeError};
+use crate::error::{ErrorHandler, ProcessingErrorHandler, RuntimeError};
+use crate::interpreter::lox_callable::LoxCallable;
 use crate::token::types::{Literal, TokenKind};
 use crate::token::Token;
 
+use super::lox_callable::{native_clock_call, LoxFunction};
 use super::Environment;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -15,6 +17,7 @@ pub enum Interpretable {
     String(String),
     Number(f64),
     Boolean(bool),
+    Callable(LoxFunction),
     Nil,
 }
 
@@ -34,22 +37,36 @@ impl Display for Interpretable {
             Interpretable::String(s) => write!(f, "\"{}\"", s),
             Interpretable::Number(n) => write!(f, "{}", n),
             Interpretable::Boolean(b) => write!(f, "{}", b),
+            Interpretable::Callable(c) => write!(f, "{}", c),
             Interpretable::Nil => write!(f, "nil"),
         }
     }
 }
 
-pub struct Interpreter<'a, ErrorHandler: ProcessingErrorHandler> {
+pub struct Interpreter {
+    pub globals: Rc<RefCell<Environment>>,
     environment: Rc<RefCell<Environment>>,
-    error_handler: &'a mut ErrorHandler,
+    error_handler: ErrorHandler,
 }
 
-impl<'a, ErrorHandler: ProcessingErrorHandler> Interpreter<'a, ErrorHandler> {
-    pub fn new(error_handler: &'a mut ErrorHandler) -> Self {
-        return Interpreter {
-            environment: Rc::new(RefCell::new(Environment::new())),
-            error_handler: error_handler,
+impl Interpreter {
+    pub fn new() -> Self {
+        let globals = Rc::new(RefCell::new(Environment::new()));
+        let environment = Rc::clone(&globals);
+        let error_handler = ErrorHandler::new();
+
+        let instance = Interpreter {
+            globals, environment, error_handler
         };
+
+        let clock_callable = LoxFunction::new_native_function(0, native_clock_call);
+
+        instance
+            .globals
+            .borrow_mut()
+            .define(String::from("clock"), Interpretable::Callable(clock_callable));
+
+        return instance;
     }
 
     fn evaluate(&mut self, expression: &Expr) -> Result<Interpretable, RuntimeError> {
@@ -60,7 +77,7 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Interpreter<'a, ErrorHandler> {
         return statement.accept(self);
     }
 
-    fn execute_block(&mut self, statements: &Vec<Stmt>, enclosing: Environment) -> Result<Interpretable, RuntimeError> {
+    pub fn execute_block(&mut self, statements: &Vec<Stmt>, enclosing: Environment) -> Result<Interpretable, RuntimeError> {
         let previous = self.environment.clone();
 
         self.environment = Rc::new(RefCell::new(enclosing));
@@ -78,14 +95,13 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Interpreter<'a, ErrorHandler> {
             let result = self.execute(&statement);
 
             if result.is_err() {
-                self.error_handler
-                    .runtime_error(result.err().expect("Invalid interpreter error state"));
+                self.error_handler.runtime_error(result.err().expect("Invalid interpreter error state"));
             }
         }
     }
 }
 
-impl<'a, ErrorHandler: ProcessingErrorHandler> ExprVisitor<Result<Interpretable, RuntimeError>> for Interpreter<'a, ErrorHandler> {
+impl ExprVisitor<Result<Interpretable, RuntimeError>> for Interpreter {
     fn visit_binary_expr(&mut self, left: &Expr, operator: &Token, right: &Expr) -> Result<Interpretable, RuntimeError> {
         let l_eval = self.evaluate(left)?;
         let r_eval = self.evaluate(right)?;
@@ -141,6 +157,30 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> ExprVisitor<Result<Interpretable,
                     &format!("Invalid operands {} and {} to operator '{}'", left, right, operator.lexeme),
                 ));
             }
+        }
+    }
+
+    fn visit_call_expr(&mut self, callee: &Expr, paren: &Token, arguments: &Vec<Expr>) -> Result<Interpretable, RuntimeError> {
+        let callee_eval = self.evaluate(callee)?;
+
+        let mut args_eval: Vec<Interpretable> = Vec::new();
+        for argument in arguments {
+            args_eval.push(self.evaluate(argument)?);
+        }
+
+        match callee_eval {
+            Interpretable::Callable(function) => {
+                if arguments.len() != function.arity() {
+                    return Err(RuntimeError::interpreter_error(
+                        paren.clone(),
+                        &format!("Expected {}  arguments, but got {}.", function.arity(), arguments.len()),
+                    ));
+                }
+
+                return function.call(self, &mut args_eval);
+            }
+
+            _ => return Err(RuntimeError::interpreter_error(paren.clone(), "Can only call functions and classes")),
         }
     }
 
@@ -212,7 +252,7 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> ExprVisitor<Result<Interpretable,
     }
 }
 
-impl<'a, ErrorHandler: ProcessingErrorHandler> StmtVisitor<Result<Interpretable, RuntimeError>> for Interpreter<'a, ErrorHandler> {
+impl StmtVisitor<Result<Interpretable, RuntimeError>> for Interpreter {
     fn visit_expr_stmt(&mut self, expr: &Expr) -> Result<Interpretable, RuntimeError> {
         return self.evaluate(expr);
     }
@@ -271,5 +311,13 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> StmtVisitor<Result<Interpretable,
 
         // Execute the block
         self.execute_block(declarations, block_environment)
+    }
+
+    fn visit_function_stmt(&mut self, name: &Token, parameters: &Vec<Token>, body: &Vec<Stmt>) -> Result<Interpretable, RuntimeError> {
+        let function = LoxFunction::new_user_function(name, parameters, body);
+
+        self.environment.borrow_mut().define(name.to_string(), Interpretable::Callable(function));
+
+        return Ok(Interpretable::Nil);
     }
 }

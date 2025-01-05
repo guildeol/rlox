@@ -53,7 +53,7 @@ fn run_file(script_path: &PathBuf) -> ExitCode {
     let mut parser = Parser::new(tokens, &mut error_handler);
     match parser.parse() {
         Ok(statements) => {
-            let mut interpreter = Interpreter::new(&mut error_handler);
+            let mut interpreter = Interpreter::new();
 
             interpreter.interpret(statements);
         }
@@ -66,9 +66,8 @@ fn run_file(script_path: &PathBuf) -> ExitCode {
 fn run_prompt() -> ExitCode {
     let stdin = io::stdin();
     let mut input = String::new();
-    let mut interpreter_error_handler: ErrorHandler = ErrorHandler::new();
 
-    let mut interpreter = Interpreter::new(&mut interpreter_error_handler);
+    let mut interpreter = Interpreter::new();
 
     loop {
         print!("> ");

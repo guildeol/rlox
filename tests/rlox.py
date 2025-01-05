@@ -30,5 +30,5 @@ class rlox:
 
     @staticmethod
     def failed(result, stderr):
-        return (result != rlox.SUCCESS and stderr != '')
+        return (result != rlox.SUCCESS or stderr != '')
 

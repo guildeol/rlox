@@ -41,7 +41,11 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Parser<'a, ErrorHandler> {
     }
 
     fn declaration(&mut self) -> Result<Stmt, RuntimeError> {
-        if self.consume_if_one_of(vec![TokenKind::Var]) {
+        if self.consume(TokenKind::Fun) {
+            return self.function("function");
+        }
+
+        if self.consume(TokenKind::Var) {
             return self.var_declaration();
         }
 
@@ -49,11 +53,9 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Parser<'a, ErrorHandler> {
     }
 
     fn statement(&mut self) -> Result<Stmt, RuntimeError> {
-        if self.consume(TokenKind::For)
-        {
+        if self.consume(TokenKind::For) {
             return self.for_statement();
-        }
-        else if self.consume(TokenKind::If) {
+        } else if self.consume(TokenKind::If) {
             return self.if_statement();
         } else if self.consume(TokenKind::Print) {
             return self.print_statement();
@@ -76,8 +78,7 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Parser<'a, ErrorHandler> {
             initializer = None;
         } else if self.consume(TokenKind::Var) {
             initializer = Some(self.var_declaration()?);
-        }
-        else {
+        } else {
             initializer = Some(self.expression_statement()?);
         }
 
@@ -178,6 +179,35 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Parser<'a, ErrorHandler> {
         self.consume_or(TokenKind::Semicolon, "Expect ';' after expression.")?;
 
         return Ok(Stmt::new_expr_stmt(expr));
+    }
+
+    fn function(&mut self, function_kind: &str) -> Result<Stmt, RuntimeError> {
+        let name = self.consume_or(TokenKind::Identifier, &format!("Expect {} name.", function_kind))?;
+
+        self.consume_or(TokenKind::LeftParen, &format!("Expect '(' after {} name.", function_kind))?;
+
+        let mut parameters: Vec<Token> = Vec::new();
+
+        if !self.check(TokenKind::RightParen) {
+            loop {
+                if parameters.len() >= 255 {
+                    self.error(&self.peek(), "Can't have more than 255 parameters");
+                }
+
+                parameters.push(self.consume_or(TokenKind::Identifier, "Expect parameter name.")?);
+
+                if !self.consume(TokenKind::Comma) {
+                    break;
+                }
+            }
+        }
+
+        self.consume_or(TokenKind::RightParen, "Expect ')' after parameters.")?;
+        self.consume_or(TokenKind::LeftBrace, &format!("Expect '{{' before {} body.", function_kind))?;
+
+        let body = self.block()?;
+
+        return Ok(Stmt::new_function(name, parameters, body));
     }
 
     fn assignment(&mut self) -> Result<Expr, RuntimeError> {
@@ -339,7 +369,43 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Parser<'a, ErrorHandler> {
             return Ok(Expr::new_unary(operator, right));
         }
 
-        return self.primary();
+        return self.call();
+    }
+
+    fn finish_call(&mut self, callee: Expr) -> Result<Expr, RuntimeError> {
+        let mut arguments: Vec<Expr> = Vec::new();
+
+        if !self.check(TokenKind::RightParen) {
+            loop {
+                if arguments.len() >= 255 {
+                    return Err(self.error(&self.peek(), "Can't have more then 255 arguments!"));
+                }
+
+                arguments.push(self.expression()?);
+
+                if !self.consume(TokenKind::Comma) {
+                    break;
+                }
+            }
+        }
+
+        let paren: Token = self.consume_or(TokenKind::RightParen, "Expect ')' after arguments.")?;
+
+        return Ok(Expr::new_call(callee, paren, arguments));
+    }
+
+    fn call(&mut self) -> Result<Expr, RuntimeError> {
+        let mut expr = self.primary()?;
+
+        loop {
+            if self.consume(TokenKind::LeftParen) {
+                expr = self.finish_call(expr)?;
+            } else {
+                break;
+            }
+        }
+
+        return Ok(expr);
     }
 
     fn primary(&mut self) -> Result<Expr, RuntimeError> {
