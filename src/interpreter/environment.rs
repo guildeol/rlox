@@ -1,13 +1,14 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::fmt::Display;
 use std::rc::Rc;
 
 use crate::token::Token;
-use crate::{error::RuntimeError, interpreter::Interpretable};
+use crate::{error::RuntimeEvent, interpreter::Interpretable};
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Environment {
-    values: ValueMap,
+    pub values: ValueMap,
     pub enclosing: Option<Rc<RefCell<Environment>>>,
 }
 
@@ -26,7 +27,7 @@ impl Environment {
         };
     }
 
-    pub fn get(&self, name: &Token) -> Result<Interpretable, RuntimeError> {
+    pub fn get(&self, name: &Token) -> Result<Interpretable, RuntimeEvent> {
         if let Some(v) = self.values.get(name) {
             return Ok(v.clone());
         }
@@ -35,13 +36,13 @@ impl Environment {
             return e.borrow().get(name);
         }
 
-        Err(RuntimeError::interpreter_error(
+        Err(RuntimeEvent::interpreter_error(
             name.clone(),
             &format!("Undefined variable '{}'.", name.lexeme),
         ))
     }
 
-    pub fn assign(&mut self, name: &Token, value: &Interpretable) -> Result<Interpretable, RuntimeError> {
+    pub fn assign(&mut self, name: &Token, value: &Interpretable) -> Result<Interpretable, RuntimeEvent> {
         if let Some(v) = self.values.assign(name, value) {
             // Found in the current environment
             return Ok(v.clone());
@@ -51,18 +52,18 @@ impl Environment {
             return e.borrow_mut().assign(name, value);
         }
 
-        Err(RuntimeError::interpreter_error(
+        Err(RuntimeEvent::interpreter_error(
             name.clone(),
             &format!("Undefined variable '{}'.", name.lexeme),
         ))
     }
 
-    pub fn define(&mut self, name: String, value: Interpretable) {
+    pub fn define(&mut self, name: String, value: Interpretable) -> Option<Interpretable> {
         return self.values.define(name, value);
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ValueMap {
     values: HashMap<String, Interpretable>,
 }
@@ -84,7 +85,22 @@ impl ValueMap {
         }
     }
 
-    pub fn define(&mut self, name: String, value: Interpretable) {
-        self.values.insert(name, value);
+    pub fn define(&mut self, name: String, value: Interpretable) -> Option<Interpretable> {
+        return self.values.insert(name, value);
+    }
+}
+
+impl Display for Environment {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "Environment {{")?;
+        for (key, value) in &self.values.values {
+            writeln!(f, "  {}: {}", key, value)?;
+        }
+
+        if let Some(enclosing) = &self.enclosing {
+            writeln!(f, "  Enclosing: {}", enclosing.borrow())?;
+        }
+
+        writeln!(f, "}}")
     }
 }

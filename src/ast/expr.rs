@@ -36,6 +36,7 @@ pub enum Expr {
         operator: Token,
         right: Box<Expr>,
     },
+    Nil,
 }
 
 pub trait ExprVisitor<R> {
@@ -112,6 +113,7 @@ impl Expr {
             Expr::Variable { name } => visitor.visit_variable_expr(name),
             Expr::Assignment { name, value } => visitor.visit_assignment_expr(name, value),
             Expr::Logical { left, operator, right } => visitor.visit_logical_expr(left, operator, right),
+            Expr::Nil => panic!("Can't visit Nil expression!"),
         }
     }
 }
@@ -126,7 +128,16 @@ impl Display for Expr {
                 callee,
                 paren: _,
                 arguments,
-            } => return write!(f, "(call {} [{:?}])", callee, arguments),
+            } => {
+                write!(f, "(call {} [", callee)?;
+                for (i, arg) in arguments.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{}", arg)?;
+                }
+                write!(f, "])")
+            }
             Expr::Grouping { expression } => {
                 return write!(f, "(group {})", expression);
             }
@@ -144,6 +155,9 @@ impl Display for Expr {
             }
             Expr::Logical { left, operator, right } => {
                 return write!(f, "{} {} {}", left, operator.lexeme, right);
+            }
+            Expr::Nil => {
+                return write!(f, "Nil");
             }
         }
     }

@@ -24,6 +24,42 @@ def test_should_call_function():
     result, stdout, _ = rlox.run(source)
     assert rlox.succeeded(result, stdout, ['"foo"'])
 
+def test_should_return_value_from_function():
+    source = 'fun foo()                         \n' \
+             '{                                 \n' \
+             '    return 42;                    \n' \
+             '}                                 \n' \
+             '                                  \n' \
+             'print foo();'
+
+    result, stdout, _ = rlox.run(source)
+    assert rlox.succeeded(result, stdout, ['42'])
+
+def test_should_call_function_with_nested_variables():
+    source = 'fun foo()                         \n' \
+             '{                                 \n' \
+             '    var a = 42;                   \n' \
+             '    var b = a + 18;               \n' \
+             '    return a + b;                 \n' \
+             '}                                 \n' \
+             '                                  \n' \
+             'print foo();'
+
+    result, stdout, _ = rlox.run(source)
+    assert rlox.succeeded(result, stdout, ['102'])
+
+def test_should_shadow_variables_in_functions():
+    source = 'var a = "global";     \n' \
+             'fun test() {          \n' \
+             '    var a = "local";  \n' \
+             '    print a;          \n' \
+             '}                     \n' \
+             'test();               \n' \
+             'print a;              \n'
+
+    result, stdout, _ = rlox.run(source)
+    assert rlox.succeeded(result, stdout, ['"local"', '"global"'])
+
 def test_should_print_native_function():
     source = 'print clock;'
 

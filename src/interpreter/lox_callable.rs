@@ -1,22 +1,17 @@
 use std::{
     fmt::{Debug, Display},
-    rc::Rc,
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use crate::{
-    ast::Stmt,
-    error::RuntimeError,
-    token::Token,
-};
+use crate::{ast::Stmt, error::RuntimeEvent, token::Token};
 
 use super::{Environment, Interpretable, Interpreter};
 
-type FunctionBody = fn(&mut Interpreter, &mut Vec<Interpretable>) -> Result<Interpretable, RuntimeError>;
+type FunctionBody = fn(&mut Interpreter, &mut Vec<Interpretable>) -> Result<Interpretable, RuntimeEvent>;
 
 pub trait LoxCallable: Debug + Clone {
     fn arity(&self) -> usize;
-    fn call(&self, interpreter: &mut Interpreter, arguments: &mut Vec<Interpretable>) -> Result<Interpretable, RuntimeError>;
+    fn call(&self, interpreter: &mut Interpreter, arguments: &mut Vec<Interpretable>) -> Result<Interpretable, RuntimeEvent>;
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -30,7 +25,7 @@ impl LoxCallable for NativeCallable {
         return self.arity;
     }
 
-    fn call(&self, interpreter: &mut Interpreter, arguments: &mut Vec<Interpretable>) -> Result<Interpretable, RuntimeError> {
+    fn call(&self, interpreter: &mut Interpreter, arguments: &mut Vec<Interpretable>) -> Result<Interpretable, RuntimeEvent> {
         return (self.body)(interpreter, arguments);
     }
 }
@@ -39,7 +34,7 @@ impl LoxCallable for NativeCallable {
 pub struct UserCallable {
     name: Token,
     parameters: Vec<Token>,
-    body: Vec<Stmt>,
+    body: Vec<Stmt>
 }
 
 impl LoxCallable for UserCallable {
@@ -47,16 +42,18 @@ impl LoxCallable for UserCallable {
         return self.parameters.len();
     }
 
-    fn call(&self, interpreter: &mut Interpreter, arguments: &mut Vec<Interpretable>) -> Result<Interpretable, RuntimeError> {
-        let mut environment = Environment::from(Rc::clone(&interpreter.globals));
+    fn call(&self, interpreter: &mut Interpreter, arguments: &mut Vec<Interpretable>) -> Result<Interpretable, RuntimeEvent> {
+        let mut environment = Environment::from(interpreter.environment.clone());
 
         for (param, arg) in self.parameters.iter().zip(arguments) {
             environment.define(param.lexeme.clone(), arg.clone());
         }
 
-        interpreter.execute_block(&self.body, environment)?;
-
-        return Ok(Interpretable::Nil);
+        match interpreter.execute_block(&self.body, environment) {
+            Err(RuntimeEvent::Return(value)) => Ok(value),
+            Err(other) => Err(other),
+            Ok(_) => Ok(Interpretable::Nil),
+        }
     }
 }
 
@@ -79,7 +76,7 @@ impl LoxFunction {
         let user_call = UserCallable {
             name: name.clone(),
             parameters: parameters.clone(),
-            body: body.clone(),
+            body: body.clone()
         };
 
         return LoxFunction::UserFunction(user_call);
@@ -90,14 +87,14 @@ impl LoxCallable for LoxFunction {
     fn arity(&self) -> usize {
         match self {
             LoxFunction::NativeFunction(n) => n.arity(),
-            LoxFunction::UserFunction(u) => u.arity()
+            LoxFunction::UserFunction(u) => u.arity(),
         }
     }
 
-    fn call(&self, interpreter: &mut Interpreter, arguments: &mut Vec<Interpretable>) -> Result<Interpretable, RuntimeError> {
+    fn call(&self, interpreter: &mut Interpreter, arguments: &mut Vec<Interpretable>) -> Result<Interpretable, RuntimeEvent> {
         match self {
             LoxFunction::NativeFunction(n) => n.call(interpreter, arguments),
-            LoxFunction::UserFunction(u) => u.call(interpreter, arguments)
+            LoxFunction::UserFunction(u) => u.call(interpreter, arguments),
         }
     }
 }
@@ -112,10 +109,7 @@ impl Display for LoxFunction {
 }
 
 // Native Call implementations
-pub fn native_clock_call(
-    _interpreter: &mut Interpreter,
-    _args: &mut Vec<Interpretable>,
-) -> Result<Interpretable, RuntimeError> {
+pub fn native_clock_call(_interpreter: &mut Interpreter, _args: &mut Vec<Interpretable>) -> Result<Interpretable, RuntimeEvent> {
     let now = SystemTime::now().duration_since(UNIX_EPOCH).expect("Time went backwards!");
     return Ok(Interpretable::Number((now.as_millis() / 1000) as f64));
 }

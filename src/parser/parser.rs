@@ -1,6 +1,6 @@
 use crate::ast::expr::Expr;
 use crate::ast::stmt::Stmt;
-use crate::error::{ProcessingErrorHandler, RuntimeError};
+use crate::error::{ProcessingErrorHandler, RuntimeEvent};
 use crate::token::types::Literal;
 use crate::token::types::TokenKind;
 use crate::token::Token;
@@ -20,7 +20,7 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Parser<'a, ErrorHandler> {
         };
     }
 
-    pub fn parse(&mut self) -> Result<Vec<Stmt>, RuntimeError> {
+    pub fn parse(&mut self) -> Result<Vec<Stmt>, RuntimeEvent> {
         let mut statements: Vec<Stmt> = Vec::new();
 
         while !self.is_at_end() {
@@ -36,11 +36,11 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Parser<'a, ErrorHandler> {
         return Ok(statements);
     }
 
-    fn expression(&mut self) -> Result<Expr, RuntimeError> {
+    fn expression(&mut self) -> Result<Expr, RuntimeEvent> {
         return self.assignment();
     }
 
-    fn declaration(&mut self) -> Result<Stmt, RuntimeError> {
+    fn declaration(&mut self) -> Result<Stmt, RuntimeEvent> {
         if self.consume(TokenKind::Fun) {
             return self.function("function");
         }
@@ -52,13 +52,15 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Parser<'a, ErrorHandler> {
         return self.statement();
     }
 
-    fn statement(&mut self) -> Result<Stmt, RuntimeError> {
+    fn statement(&mut self) -> Result<Stmt, RuntimeEvent> {
         if self.consume(TokenKind::For) {
             return self.for_statement();
         } else if self.consume(TokenKind::If) {
             return self.if_statement();
         } else if self.consume(TokenKind::Print) {
             return self.print_statement();
+        } else if self.consume(TokenKind::Return) {
+            return self.return_statement();
         } else if self.consume(TokenKind::While) {
             return self.while_statement();
         } else if self.consume(TokenKind::LeftBrace) {
@@ -70,7 +72,7 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Parser<'a, ErrorHandler> {
         return self.expression_statement();
     }
 
-    fn for_statement(&mut self) -> Result<Stmt, RuntimeError> {
+    fn for_statement(&mut self) -> Result<Stmt, RuntimeEvent> {
         self.consume_or(TokenKind::LeftParen, "Expect '(' after 'for'.")?;
 
         let initializer: Option<Stmt>;
@@ -112,7 +114,7 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Parser<'a, ErrorHandler> {
         return Ok(body);
     }
 
-    fn if_statement(&mut self) -> Result<Stmt, RuntimeError> {
+    fn if_statement(&mut self) -> Result<Stmt, RuntimeEvent> {
         self.consume_or(TokenKind::LeftParen, "Expect '(' after 'if'.")?;
 
         let condition = self.expression()?;
@@ -128,7 +130,7 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Parser<'a, ErrorHandler> {
         return Ok(Stmt::new_if_stmt(condition, then_branch, else_branch));
     }
 
-    fn print_statement(&mut self) -> Result<Stmt, RuntimeError> {
+    fn print_statement(&mut self) -> Result<Stmt, RuntimeEvent> {
         let expr = self.expression()?;
 
         self.consume_or(TokenKind::Semicolon, "Expect ';' after value.")?;
@@ -136,7 +138,20 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Parser<'a, ErrorHandler> {
         return Ok(Stmt::new_print_stmt(expr));
     }
 
-    fn var_declaration(&mut self) -> Result<Stmt, RuntimeError> {
+    fn return_statement(&mut self) -> Result<Stmt, RuntimeEvent> {
+        let keyword = self.previous();
+
+        let mut value = Expr::Nil;
+        if !self.check(TokenKind::Semicolon) {
+            value = self.expression()?;
+        }
+
+        self.consume_or(TokenKind::Semicolon, "Expect ';' after return value.")?;
+
+        return Ok(Stmt::new_return_stmt(keyword, value));
+    }
+
+    fn var_declaration(&mut self) -> Result<Stmt, RuntimeEvent> {
         let name = self.consume_or(TokenKind::Identifier, "Expect variable name")?;
 
         let mut initializer: Option<Expr> = None;
@@ -149,7 +164,7 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Parser<'a, ErrorHandler> {
         return Ok(Stmt::new_var_stmt(name, initializer));
     }
 
-    fn while_statement(&mut self) -> Result<Stmt, RuntimeError> {
+    fn while_statement(&mut self) -> Result<Stmt, RuntimeEvent> {
         self.consume_or(TokenKind::LeftParen, "Expect '(' after 'while'.")?;
 
         let condition = self.expression()?;
@@ -161,7 +176,7 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Parser<'a, ErrorHandler> {
         return Ok(Stmt::new_while_stmt(condition, body));
     }
 
-    fn block(&mut self) -> Result<Vec<Stmt>, RuntimeError> {
+    fn block(&mut self) -> Result<Vec<Stmt>, RuntimeEvent> {
         let mut statements: Vec<Stmt> = Vec::new();
 
         while !self.check(TokenKind::RightBrace) && !self.is_at_end() {
@@ -173,7 +188,7 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Parser<'a, ErrorHandler> {
         return Ok(statements);
     }
 
-    fn expression_statement(&mut self) -> Result<Stmt, RuntimeError> {
+    fn expression_statement(&mut self) -> Result<Stmt, RuntimeEvent> {
         let expr = self.expression()?;
 
         self.consume_or(TokenKind::Semicolon, "Expect ';' after expression.")?;
@@ -181,7 +196,7 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Parser<'a, ErrorHandler> {
         return Ok(Stmt::new_expr_stmt(expr));
     }
 
-    fn function(&mut self, function_kind: &str) -> Result<Stmt, RuntimeError> {
+    fn function(&mut self, function_kind: &str) -> Result<Stmt, RuntimeEvent> {
         let name = self.consume_or(TokenKind::Identifier, &format!("Expect {} name.", function_kind))?;
 
         self.consume_or(TokenKind::LeftParen, &format!("Expect '(' after {} name.", function_kind))?;
@@ -210,7 +225,7 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Parser<'a, ErrorHandler> {
         return Ok(Stmt::new_function(name, parameters, body));
     }
 
-    fn assignment(&mut self) -> Result<Expr, RuntimeError> {
+    fn assignment(&mut self) -> Result<Expr, RuntimeEvent> {
         let expr = self.or()?;
 
         if self.consume(TokenKind::Equal) {
@@ -230,7 +245,7 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Parser<'a, ErrorHandler> {
         return Ok(expr);
     }
 
-    fn or(&mut self) -> Result<Expr, RuntimeError> {
+    fn or(&mut self) -> Result<Expr, RuntimeEvent> {
         let mut expr = self.and()?;
 
         while self.consume(TokenKind::Or) {
@@ -243,7 +258,7 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Parser<'a, ErrorHandler> {
         return Ok(expr);
     }
 
-    fn and(&mut self) -> Result<Expr, RuntimeError> {
+    fn and(&mut self) -> Result<Expr, RuntimeEvent> {
         let mut expr = self.equality()?;
 
         while self.consume(TokenKind::And) {
@@ -256,7 +271,7 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Parser<'a, ErrorHandler> {
         return Ok(expr);
     }
 
-    fn equality(&mut self) -> Result<Expr, RuntimeError> {
+    fn equality(&mut self) -> Result<Expr, RuntimeEvent> {
         let mut expr = self.comparison()?;
 
         while self.consume_if_one_of(vec![TokenKind::BangEqual, TokenKind::EqualEqual]) {
@@ -317,7 +332,7 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Parser<'a, ErrorHandler> {
         return self.tokens[self.current - 1].clone();
     }
 
-    fn comparison(&mut self) -> Result<Expr, RuntimeError> {
+    fn comparison(&mut self) -> Result<Expr, RuntimeEvent> {
         let mut expr = self.term()?;
 
         while self.consume_if_one_of(vec![
@@ -335,7 +350,7 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Parser<'a, ErrorHandler> {
         return Ok(expr);
     }
 
-    fn term(&mut self) -> Result<Expr, RuntimeError> {
+    fn term(&mut self) -> Result<Expr, RuntimeEvent> {
         let mut expr = self.factor()?;
 
         while self.consume_if_one_of(vec![TokenKind::Minus, TokenKind::Plus]) {
@@ -348,7 +363,7 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Parser<'a, ErrorHandler> {
         return Ok(expr);
     }
 
-    fn factor(&mut self) -> Result<Expr, RuntimeError> {
+    fn factor(&mut self) -> Result<Expr, RuntimeEvent> {
         let mut expr = self.unary()?;
 
         while self.consume_if_one_of(vec![TokenKind::Slash, TokenKind::Star]) {
@@ -361,7 +376,7 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Parser<'a, ErrorHandler> {
         return Ok(expr);
     }
 
-    fn unary(&mut self) -> Result<Expr, RuntimeError> {
+    fn unary(&mut self) -> Result<Expr, RuntimeEvent> {
         while self.consume_if_one_of(vec![TokenKind::Bang, TokenKind::Minus]) {
             let operator = self.previous();
             let right = self.unary()?;
@@ -372,7 +387,7 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Parser<'a, ErrorHandler> {
         return self.call();
     }
 
-    fn finish_call(&mut self, callee: Expr) -> Result<Expr, RuntimeError> {
+    fn finish_call(&mut self, callee: Expr) -> Result<Expr, RuntimeEvent> {
         let mut arguments: Vec<Expr> = Vec::new();
 
         if !self.check(TokenKind::RightParen) {
@@ -394,7 +409,7 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Parser<'a, ErrorHandler> {
         return Ok(Expr::new_call(callee, paren, arguments));
     }
 
-    fn call(&mut self) -> Result<Expr, RuntimeError> {
+    fn call(&mut self) -> Result<Expr, RuntimeEvent> {
         let mut expr = self.primary()?;
 
         loop {
@@ -408,7 +423,7 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Parser<'a, ErrorHandler> {
         return Ok(expr);
     }
 
-    fn primary(&mut self) -> Result<Expr, RuntimeError> {
+    fn primary(&mut self) -> Result<Expr, RuntimeEvent> {
         if self.consume(TokenKind::False) {
             return Ok(Expr::new_literal(Literal::Boolean(false)));
         }
@@ -436,13 +451,13 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Parser<'a, ErrorHandler> {
             return Ok(Expr::new_variable(self.previous()));
         }
 
-        return Err(RuntimeError::parse_error(&format!(
+        return Err(RuntimeEvent::parse_error(&format!(
             "Unexpected primary expression token '{}'",
             self.peek()
         )));
     }
 
-    fn consume_or(&mut self, kind: TokenKind, message: &str) -> Result<Token, RuntimeError> {
+    fn consume_or(&mut self, kind: TokenKind, message: &str) -> Result<Token, RuntimeEvent> {
         if self.check(kind) {
             return Ok(self.advance());
         } else {
@@ -450,7 +465,7 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Parser<'a, ErrorHandler> {
         }
     }
 
-    fn error(&mut self, token: &Token, message: &str) -> RuntimeError {
+    fn error(&mut self, token: &Token, message: &str) -> RuntimeEvent {
         if token.kind == TokenKind::EndOfFile {
             self.error_handler.parsing_error(token.line, " at end", message);
         } else {
@@ -458,7 +473,7 @@ impl<'a, ErrorHandler: ProcessingErrorHandler> Parser<'a, ErrorHandler> {
                 .parsing_error(token.line, &format!(" at '{}'", token.lexeme), message);
         }
 
-        return RuntimeError::parse_error("");
+        return RuntimeEvent::parse_error("");
     }
 
     fn synchronize(&mut self) {

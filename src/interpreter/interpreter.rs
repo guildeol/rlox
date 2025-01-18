@@ -4,7 +4,7 @@ use std::io::Write;
 use std::rc::Rc;
 
 use crate::ast::{Expr, ExprVisitor, Stmt, StmtVisitor};
-use crate::error::{ErrorHandler, ProcessingErrorHandler, RuntimeError};
+use crate::error::{ErrorHandler, ProcessingErrorHandler, RuntimeEvent};
 use crate::interpreter::lox_callable::LoxCallable;
 use crate::token::types::{Literal, TokenKind};
 use crate::token::Token;
@@ -45,7 +45,7 @@ impl Display for Interpretable {
 
 pub struct Interpreter {
     pub globals: Rc<RefCell<Environment>>,
-    environment: Rc<RefCell<Environment>>,
+    pub environment: Rc<RefCell<Environment>>,
     error_handler: ErrorHandler,
 }
 
@@ -56,7 +56,9 @@ impl Interpreter {
         let error_handler = ErrorHandler::new();
 
         let instance = Interpreter {
-            globals, environment, error_handler
+            globals,
+            environment,
+            error_handler,
         };
 
         let clock_callable = LoxFunction::new_native_function(0, native_clock_call);
@@ -69,25 +71,32 @@ impl Interpreter {
         return instance;
     }
 
-    fn evaluate(&mut self, expression: &Expr) -> Result<Interpretable, RuntimeError> {
+    fn evaluate(&mut self, expression: &Expr) -> Result<Interpretable, RuntimeEvent> {
         return expression.accept(self);
     }
 
-    fn execute(&mut self, statement: &Stmt) -> Result<Interpretable, RuntimeError> {
+    fn execute(&mut self, statement: &Stmt) -> Result<Interpretable, RuntimeEvent> {
         return statement.accept(self);
     }
 
-    pub fn execute_block(&mut self, statements: &Vec<Stmt>, enclosing: Environment) -> Result<Interpretable, RuntimeError> {
+    pub fn execute_block(&mut self, statements: &Vec<Stmt>, enclosing:Environment) -> Result<Interpretable, RuntimeEvent> {
+        let mut result = Ok(Interpretable::Nil);
+
         let previous = self.environment.clone();
 
         self.environment = Rc::new(RefCell::new(enclosing));
         for statement in statements {
-            self.execute(statement)?;
+            result = self.execute(statement);
+
+            // Break for error to ensure we clean-up the environment
+            if result.is_err() {
+                break;
+            }
         }
 
         self.environment = previous;
 
-        return Ok(Interpretable::Nil);
+        return result;
     }
 
     pub fn interpret(&mut self, statements: Vec<Stmt>) {
@@ -95,14 +104,15 @@ impl Interpreter {
             let result = self.execute(&statement);
 
             if result.is_err() {
-                self.error_handler.runtime_error(result.err().expect("Invalid interpreter error state"));
+                self.error_handler
+                    .runtime_error(result.err().expect("Invalid interpreter error state"));
             }
         }
     }
 }
 
-impl ExprVisitor<Result<Interpretable, RuntimeError>> for Interpreter {
-    fn visit_binary_expr(&mut self, left: &Expr, operator: &Token, right: &Expr) -> Result<Interpretable, RuntimeError> {
+impl ExprVisitor<Result<Interpretable, RuntimeEvent>> for Interpreter {
+    fn visit_binary_expr(&mut self, left: &Expr, operator: &Token, right: &Expr) -> Result<Interpretable, RuntimeEvent> {
         let l_eval = self.evaluate(left)?;
         let r_eval = self.evaluate(right)?;
 
@@ -152,7 +162,7 @@ impl ExprVisitor<Result<Interpretable, RuntimeError>> for Interpreter {
             }
 
             (_, _, _) => {
-                return Err(RuntimeError::interpreter_error(
+                return Err(RuntimeEvent::interpreter_error(
                     operator.clone(),
                     &format!("Invalid operands {} and {} to operator '{}'", left, right, operator.lexeme),
                 ));
@@ -160,7 +170,7 @@ impl ExprVisitor<Result<Interpretable, RuntimeError>> for Interpreter {
         }
     }
 
-    fn visit_call_expr(&mut self, callee: &Expr, paren: &Token, arguments: &Vec<Expr>) -> Result<Interpretable, RuntimeError> {
+    fn visit_call_expr(&mut self, callee: &Expr, paren: &Token, arguments: &Vec<Expr>) -> Result<Interpretable, RuntimeEvent> {
         let callee_eval = self.evaluate(callee)?;
 
         let mut args_eval: Vec<Interpretable> = Vec::new();
@@ -171,7 +181,7 @@ impl ExprVisitor<Result<Interpretable, RuntimeError>> for Interpreter {
         match callee_eval {
             Interpretable::Callable(function) => {
                 if arguments.len() != function.arity() {
-                    return Err(RuntimeError::interpreter_error(
+                    return Err(RuntimeEvent::interpreter_error(
                         paren.clone(),
                         &format!("Expected {}  arguments, but got {}.", function.arity(), arguments.len()),
                     ));
@@ -180,15 +190,20 @@ impl ExprVisitor<Result<Interpretable, RuntimeError>> for Interpreter {
                 return function.call(self, &mut args_eval);
             }
 
-            _ => return Err(RuntimeError::interpreter_error(paren.clone(), "Can only call functions and classes")),
+            _ => {
+                return Err(RuntimeEvent::interpreter_error(
+                    paren.clone(),
+                    "Can only call functions and classes",
+                ))
+            }
         }
     }
 
-    fn visit_grouping_expr(&mut self, expression: &Expr) -> Result<Interpretable, RuntimeError> {
+    fn visit_grouping_expr(&mut self, expression: &Expr) -> Result<Interpretable, RuntimeEvent> {
         return self.evaluate(expression);
     }
 
-    fn visit_literal_expr(&mut self, value: &Literal) -> Result<Interpretable, RuntimeError> {
+    fn visit_literal_expr(&mut self, value: &Literal) -> Result<Interpretable, RuntimeEvent> {
         match value {
             Literal::Number(n) => return Ok(Interpretable::Number(*n)),
             Literal::Boolean(b) => return Ok(Interpretable::Boolean(*b)),
@@ -197,13 +212,13 @@ impl ExprVisitor<Result<Interpretable, RuntimeError>> for Interpreter {
         }
     }
 
-    fn visit_unary_expr(&mut self, operator: &Token, expr: &Expr) -> Result<Interpretable, RuntimeError> {
+    fn visit_unary_expr(&mut self, operator: &Token, expr: &Expr) -> Result<Interpretable, RuntimeEvent> {
         let right = self.evaluate(expr)?;
 
         match operator.kind {
             TokenKind::Minus => match right {
                 Interpretable::Number(n) => return Ok(Interpretable::Number(-n)),
-                _ => Err(RuntimeError::interpreter_error(
+                _ => Err(RuntimeEvent::interpreter_error(
                     operator.clone(),
                     "Cannot handle '-' on non-number type",
                 )),
@@ -217,16 +232,16 @@ impl ExprVisitor<Result<Interpretable, RuntimeError>> for Interpreter {
         }
     }
 
-    fn visit_variable_expr(&mut self, name: &Token) -> Result<Interpretable, RuntimeError> {
+    fn visit_variable_expr(&mut self, name: &Token) -> Result<Interpretable, RuntimeEvent> {
         return self.environment.borrow().get(name);
     }
 
-    fn visit_assignment_expr(&mut self, name: &Token, expr: &Expr) -> Result<Interpretable, RuntimeError> {
+    fn visit_assignment_expr(&mut self, name: &Token, expr: &Expr) -> Result<Interpretable, RuntimeEvent> {
         let value = self.evaluate(expr)?;
         return self.environment.borrow_mut().assign(name, &value);
     }
 
-    fn visit_logical_expr(&mut self, left: &Expr, operator: &Token, right: &Expr) -> Result<Interpretable, RuntimeError> {
+    fn visit_logical_expr(&mut self, left: &Expr, operator: &Token, right: &Expr) -> Result<Interpretable, RuntimeEvent> {
         let left_eval = self.evaluate(left)?;
 
         let is_truthy = left_eval.is_truthy();
@@ -252,12 +267,12 @@ impl ExprVisitor<Result<Interpretable, RuntimeError>> for Interpreter {
     }
 }
 
-impl StmtVisitor<Result<Interpretable, RuntimeError>> for Interpreter {
-    fn visit_expr_stmt(&mut self, expr: &Expr) -> Result<Interpretable, RuntimeError> {
+impl StmtVisitor<Result<Interpretable, RuntimeEvent>> for Interpreter {
+    fn visit_expr_stmt(&mut self, expr: &Expr) -> Result<Interpretable, RuntimeEvent> {
         return self.evaluate(expr);
     }
 
-    fn visit_if_stmt(&mut self, condition: &Expr, then_branch: &Stmt, else_branch: &Option<Stmt>) -> Result<Interpretable, RuntimeError> {
+    fn visit_if_stmt(&mut self, condition: &Expr, then_branch: &Stmt, else_branch: &Option<Stmt>) -> Result<Interpretable, RuntimeEvent> {
         let predicate = self.evaluate(condition)?;
         if predicate.is_truthy() {
             return self.execute(then_branch);
@@ -268,7 +283,7 @@ impl StmtVisitor<Result<Interpretable, RuntimeError>> for Interpreter {
         return Ok(Interpretable::Nil);
     }
 
-    fn visit_print_stmt(&mut self, expr: &Expr) -> Result<Interpretable, RuntimeError> {
+    fn visit_print_stmt(&mut self, expr: &Expr) -> Result<Interpretable, RuntimeEvent> {
         match self.evaluate(expr) {
             Ok(object) => {
                 println!("{}", object);
@@ -279,7 +294,7 @@ impl StmtVisitor<Result<Interpretable, RuntimeError>> for Interpreter {
         }
     }
 
-    fn visit_var_stmt(&mut self, name: &Token, initializer: &Option<Expr>) -> Result<Interpretable, RuntimeError> {
+    fn visit_var_stmt(&mut self, name: &Token, initializer: &Option<Expr>) -> Result<Interpretable, RuntimeEvent> {
         let mut value: Interpretable = Interpretable::Nil;
         if initializer.is_some() {
             value = self.evaluate(initializer.as_ref().unwrap())?;
@@ -289,7 +304,7 @@ impl StmtVisitor<Result<Interpretable, RuntimeError>> for Interpreter {
         return Ok(Interpretable::Nil);
     }
 
-    fn visit_while_stmt(&mut self, condition: &Expr, body: &Stmt) -> Result<Interpretable, RuntimeError> {
+    fn visit_while_stmt(&mut self, condition: &Expr, body: &Stmt) -> Result<Interpretable, RuntimeEvent> {
         let mut predicate: Interpretable;
 
         loop {
@@ -305,7 +320,7 @@ impl StmtVisitor<Result<Interpretable, RuntimeError>> for Interpreter {
         return Ok(Interpretable::Nil);
     }
 
-    fn visit_block_stmt(&mut self, declarations: &Vec<Stmt>) -> Result<Interpretable, RuntimeError> {
+    fn visit_block_stmt(&mut self, declarations: &Vec<Stmt>) -> Result<Interpretable, RuntimeEvent> {
         // Create a new block environment using the current environment as its parent
         let block_environment = Environment::from(Rc::clone(&self.environment));
 
@@ -313,11 +328,25 @@ impl StmtVisitor<Result<Interpretable, RuntimeError>> for Interpreter {
         self.execute_block(declarations, block_environment)
     }
 
-    fn visit_function_stmt(&mut self, name: &Token, parameters: &Vec<Token>, body: &Vec<Stmt>) -> Result<Interpretable, RuntimeError> {
+    fn visit_function_stmt(&mut self, name: &Token, parameters: &Vec<Token>, body: &Vec<Stmt>) -> Result<Interpretable, RuntimeEvent> {
         let function = LoxFunction::new_user_function(name, parameters, body);
 
-        self.environment.borrow_mut().define(name.to_string(), Interpretable::Callable(function));
+        self.environment
+            .borrow_mut()
+            .define(name.to_string(), Interpretable::Callable(function));
 
-        return Ok(Interpretable::Nil);
+        Ok(Interpretable::Nil)
+    }
+
+    fn visit_return_stmt(&mut self, _keyword: &Token, value: &Expr) -> Result<Interpretable, RuntimeEvent> {
+        let mut result = Interpretable::Nil;
+
+        if *value != Expr::Nil {
+            result = self.evaluate(value)?;
+        }
+
+        // This is terrible, honestly. It's not an error, but I don't feel like changing the return type for every function.
+        // The return type should've been a variant (Interpretable, Error or Return) instead of a Result.
+        return Err(RuntimeEvent::new_return(result));
     }
 }

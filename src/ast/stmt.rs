@@ -30,6 +30,10 @@ pub enum Stmt {
         parameters: Vec<Token>,
         body: Vec<Stmt>,
     },
+    ReturnStmt {
+        keyword: Token,
+        value: Box<Expr>,
+    },
 }
 
 pub trait StmtVisitor<R> {
@@ -40,6 +44,7 @@ pub trait StmtVisitor<R> {
     fn visit_block_stmt(&mut self, declarations: &Vec<Stmt>) -> R;
     fn visit_while_stmt(&mut self, condition: &Expr, body: &Stmt) -> R;
     fn visit_function_stmt(&mut self, name: &Token, parameters: &Vec<Token>, body: &Vec<Stmt>) -> R;
+    fn visit_return_stmt(&mut self, keyword: &Token, value: &Expr) -> R;
 }
 
 impl Stmt {
@@ -83,6 +88,13 @@ impl Stmt {
         return Stmt::FunctionStmt { name, parameters, body };
     }
 
+    pub fn new_return_stmt(keyword: Token, value: Expr) -> Self {
+        return Stmt::ReturnStmt {
+            keyword: keyword,
+            value: Box::new(value),
+        };
+    }
+
     pub fn accept<R>(&self, visitor: &mut dyn StmtVisitor<R>) -> R {
         match self {
             Stmt::ExprStmt { expr } => visitor.visit_expr_stmt(expr),
@@ -96,6 +108,66 @@ impl Stmt {
             Stmt::BlockStmt { declarations } => visitor.visit_block_stmt(declarations),
             Stmt::WhileStmt { condition, body } => visitor.visit_while_stmt(condition, body),
             Stmt::FunctionStmt { name, parameters, body } => visitor.visit_function_stmt(name, parameters, body),
+            Stmt::ReturnStmt { keyword, value } => visitor.visit_return_stmt(keyword, value),
+        }
+    }
+}
+
+use std::fmt;
+
+impl fmt::Display for Stmt {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Stmt::ExprStmt { expr } => write!(f, "ExprStmt({})", expr),
+            Stmt::IfStmt {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
+                writeln!(
+                    f,
+                    "IfStmt(condition: {}, then: {}, else: {})",
+                    condition,
+                    then_branch,
+                    match **else_branch {
+                        Some(ref else_branch) => format!("{}", else_branch),
+                        None => "None".to_string(),
+                    }
+                )
+            }
+            Stmt::PrintStmt { expr } => writeln!(f, "PrintStmt({})", expr),
+            Stmt::VarStmt { name, initializer } => {
+                writeln!(
+                    f,
+                    "VarStmt(name: {}, initializer: {})",
+                    name,
+                    match initializer {
+                        Some(expr) => format!("{}", expr),
+                        None => "None".to_string(),
+                    }
+                )
+            }
+            Stmt::BlockStmt { declarations } => {
+                let decls: Vec<String> = declarations.iter().map(|stmt| format!("{}", stmt)).collect();
+                writeln!(f, "BlockStmt([{}])", decls.join(", "))
+            }
+            Stmt::WhileStmt { condition, body } => {
+                writeln!(f, "WhileStmt(condition: {}, body: {})", condition, body)
+            }
+            Stmt::FunctionStmt { name, parameters, body } => {
+                let params: Vec<String> = parameters.iter().map(|param| format!("{}", param)).collect();
+                let body_stmts: Vec<String> = body.iter().map(|stmt| format!("{}", stmt)).collect();
+                writeln!(
+                    f,
+                    "FunctionStmt(name: {}, parameters: [{}], body: [{}])",
+                    name,
+                    params.join(", "),
+                    body_stmts.join(", ")
+                )
+            }
+            Stmt::ReturnStmt { keyword, value } => {
+                writeln!(f, "ReturnStmt(keyword: {}, value: {})", keyword, value)
+            }
         }
     }
 }

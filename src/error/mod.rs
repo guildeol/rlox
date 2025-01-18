@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::token::Token;
+use crate::{interpreter::Interpretable, token::Token};
 
 fn report(line: u32, location: &str, message: &str) {
     eprintln!("line {line} Error{location}: {message}");
@@ -14,7 +14,7 @@ pub trait ProcessingErrorHandler {
         unimplemented!();
     }
 
-    fn runtime_error(&mut self, _error: RuntimeError) {
+    fn runtime_error(&mut self, _error: RuntimeEvent) {
         unimplemented!();
     }
 }
@@ -40,35 +40,41 @@ impl ProcessingErrorHandler for ErrorHandler {
         self.had_error = true;
     }
 
-    fn runtime_error(&mut self, error: RuntimeError) {
+    fn runtime_error(&mut self, error: RuntimeEvent) {
         eprintln!("{}", error);
         self.had_error = true;
     }
 }
 
 #[derive(Debug)]
-pub enum RuntimeError {
-    Parse(String),
-    Interpreter(Token, String),
+pub enum RuntimeEvent {
+    ParseError(String),
+    InterpreterError(Token, String),
+    Return(Interpretable),
 }
 
-impl RuntimeError {
+impl RuntimeEvent {
     pub fn parse_error(message: &str) -> Self {
-        return RuntimeError::Parse(message.to_string());
+        return RuntimeEvent::ParseError(message.to_string());
     }
 
     pub fn interpreter_error(token: Token, message: &str) -> Self {
-        return RuntimeError::Interpreter(token, message.to_string());
+        return RuntimeEvent::InterpreterError(token, message.to_string());
+    }
+
+    pub fn new_return(value: Interpretable) -> Self {
+        return RuntimeEvent::Return(value);
     }
 }
 
-impl Display for RuntimeError {
+impl Display for RuntimeEvent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            RuntimeError::Parse(msg) => write!(f, "ParseError: {}", msg),
-            RuntimeError::Interpreter(token, msg) => {
+            RuntimeEvent::ParseError(msg) => write!(f, "ParseError: {}", msg),
+            RuntimeEvent::InterpreterError(token, msg) => {
                 write!(f, "[line {}] InterpretError: {} ", token.line, msg)
             }
+            RuntimeEvent::Return(v) => write!(f, "Return value: {}", v),
         }
     }
 }
