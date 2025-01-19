@@ -1,6 +1,5 @@
 use std::{
-    fmt::{Debug, Display},
-    time::{SystemTime, UNIX_EPOCH},
+    cell::RefCell, fmt::{Debug, Display}, rc::Rc, time::{SystemTime, UNIX_EPOCH}
 };
 
 use crate::{ast::Stmt, error::RuntimeEvent, token::Token};
@@ -34,7 +33,8 @@ impl LoxCallable for NativeCallable {
 pub struct UserCallable {
     name: Token,
     parameters: Vec<Token>,
-    body: Vec<Stmt>
+    body: Vec<Stmt>,
+    closure: Rc<RefCell<Environment>>
 }
 
 impl LoxCallable for UserCallable {
@@ -42,8 +42,8 @@ impl LoxCallable for UserCallable {
         return self.parameters.len();
     }
 
-    fn call(&self, interpreter: &mut Interpreter, arguments: &mut Vec<Interpretable>) -> Result<Interpretable, RuntimeEvent> {
-        let mut environment = Environment::from(interpreter.environment.clone());
+    fn call(&self, interpreter: &mut Interpreter, arguments: &mut Vec<Interpretable>, ) -> Result<Interpretable, RuntimeEvent> {
+        let mut environment = Environment::from(self.closure.clone());
 
         for (param, arg) in self.parameters.iter().zip(arguments) {
             environment.define(param.lexeme.clone(), arg.clone());
@@ -72,11 +72,12 @@ impl LoxFunction {
         return LoxFunction::NativeFunction(native_call);
     }
 
-    pub fn new_user_function(name: &Token, parameters: &Vec<Token>, body: &Vec<Stmt>) -> Self {
+    pub fn new_user_function(name: &Token, parameters: &Vec<Token>, body: &Vec<Stmt>, closure: Rc<RefCell<Environment>>) -> Self {
         let user_call = UserCallable {
             name: name.clone(),
             parameters: parameters.clone(),
-            body: body.clone()
+            body: body.clone(),
+            closure:closure,
         };
 
         return LoxFunction::UserFunction(user_call);

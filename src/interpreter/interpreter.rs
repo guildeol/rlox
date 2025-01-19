@@ -329,7 +329,7 @@ impl StmtVisitor<Result<Interpretable, RuntimeEvent>> for Interpreter {
     }
 
     fn visit_function_stmt(&mut self, name: &Token, parameters: &Vec<Token>, body: &Vec<Stmt>) -> Result<Interpretable, RuntimeEvent> {
-        let function = LoxFunction::new_user_function(name, parameters, body);
+        let function = LoxFunction::new_user_function(name, parameters, body, self.environment.clone());
 
         self.environment
             .borrow_mut()

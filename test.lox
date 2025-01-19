@@ -1,9 +1,9 @@
-fun foo(n)
-{
-  var a = n - 2;
-  var b = n - 1;
-
-  print a + b;
+fun fib(n) {
+  if (n < 2) return n;
+  return fib(n - 1) + fib(n - 2);
 }
 
-foo(3);
+var before = clock();
+print fib(30);
+var after = clock();
+print after - before;

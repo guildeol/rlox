@@ -60,6 +60,22 @@ def test_should_shadow_variables_in_functions():
     result, stdout, _ = rlox.run(source)
     assert rlox.succeeded(result, stdout, ['"local"', '"global"'])
 
+def test_should_allow_local_function():
+    source =  'fun makeCounter() {            \n' \
+              '  var i = 0;                   \n' \
+              '  fun count() {                \n' \
+              '    i = i + 1;                 \n' \
+              '    print i;                   \n' \
+              '  }                            \n' \
+              '  return count;                \n' \
+              '}                              \n' \
+              'var counter = makeCounter();   \n' \
+              'counter();                     \n' \
+              'counter();                     \n'
+
+    result, stdout, _ = rlox.run(source)
+    assert rlox.succeeded(result, stdout, ["1", "2"])
+
 def test_should_print_native_function():
     source = 'print clock;'
 
